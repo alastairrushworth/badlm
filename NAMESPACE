@@ -1,0 +1,6 @@
+useDynLib(badlm, .registration = TRUE)
+import(Rcpp)
+import(spam)
+import(truncdist)
+importFrom(splines, splineDesign)
+export(badlm)

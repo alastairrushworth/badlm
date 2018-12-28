@@ -1,0 +1,15 @@
+Package: badlm
+Title: Bayesian Adaptive Distributed Lag Models
+Version: 0.0.0.9000
+Author: person("Alastair", "Rushworth", email = "alastairmrushworth@gmail.com", role = c("aut", "cre"))
+Maintainer: Alastair Rushworth <alastairmrushworth@gmail.com>
+Description: Bayesian Adaptive Distributed Lag Models
+LinkingTo: Rcpp
+LazyLoad: yes
+ByteCompile: yes
+Depends: R (>= 3.1.0), Rcpp, spam, truncdist
+Imports: splines
+License: GPL-2
+URL: http://github.com/alastairrushworth/badlm
+BugReports: http://github.com/alastairrushworth/badlm/issues
+RoxygenNote: 6.1.1

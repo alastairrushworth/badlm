@@ -1,0 +1,66 @@
+---
+output: github_document
+---
+
+```{r, echo = FALSE}
+knitr::opts_chunk$set(
+  fig.path = "man/figures/README-"
+)
+```
+
+
+Installation 
+---
+
+To install the development version of the package, use
+```{r, eval = FALSE, warning=FALSE, message=F}
+devtools::install_github("alastairrushworth/badlm")
+
+# load the package
+library(badlm)
+```
+
+```{r, echo = FALSE, warning=FALSE, message=F}
+library(badlm)
+```
+
+
+`badlm` example
+---
+
+
+Generate a distributed lag function
+```{r, cache = TRUE}
+# a nice distributed lag function - hump
+x          <- 0:50
+dlfunction <- -0.1 + (0.01*exp(-0.2*x) + exp(dnorm(x, sd = 4, mean = 10))) / 10
+
+plot(x, dlfunction, type = "l")
+```
+
+Generate predictor and response under the distributed lag function
+```{r, cache = TRUE}
+# response is an AR(1) process
+expose        <- arima.sim(model = list(ar = 0.5), n = 500, sd = 0.1)
+expose        <- (expose - mean(expose)) / sd(expose)
+lag_mat       <- lag_matrix(expose, p = 50)
+deaths.sig    <- lag_mat %*% dlfunction
+deaths        <- deaths.sig + rnorm(450, sd = 0.01)
+```
+
+Try to recover the distribution lag function
+```{r, cache = TRUE, results='hide'}
+dlm_est <- badlm(x = expose, y = deaths, 
+           nlag = 50, k = 30, samples = 1000)
+```
+
+Plot the result and compare to the truth
+
+```{r}
+plot(x, dlfunction, type = "l")
+lines(dlm_est$coefs$lag, dlm_est$coefs$beta, col ="red")
+lines(dlm_est$coefs$lag, dlm_est$coefs$upper, col = "gray60")
+lines(dlm_est$coefs$lag, dlm_est$coefs$lower, col = "gray60")
+```
+
+

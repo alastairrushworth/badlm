@@ -10,5 +10,10 @@ badlm <- function(x, y, k, nlag, samples = 10000, thin = 1){
   model_out    <- gaussian_badlm(X = X_mat, y = c(y, 0), samples = samples, thin = thin)
   
   # return the output
-  return(model_out)
+  fcoefs <- as.numeric(bbase %*% apply(model_out$bet_store, 2, quantile, probs = 0.5))
+  fupper <- as.numeric(bbase %*% apply(model_out$bet_store, 2, quantile, probs = 0.975))
+  flower <- as.numeric(bbase %*% apply(model_out$bet_store, 2, quantile, probs = 0.025))
+  ftable <- tibble(lag = 0:nlag, beta = fcoefs, upper = fupper, lower = flower)
+  
+  return(list(coefs = ftable, model_out))
 }

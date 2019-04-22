@@ -8,7 +8,7 @@ LinkingTo: Rcpp
 LazyLoad: yes
 ByteCompile: yes
 Depends: R (>= 3.1.0), Rcpp, spam, truncdist
-Imports: splines
+Imports: splines, tibble
 License: GPL-2
 URL: http://github.com/alastairrushworth/badlm
 BugReports: http://github.com/alastairrushworth/badlm/issues

@@ -1,4 +1,9 @@
+#' @export
+#' @importFrom Rcpp compileAttributes
 badlm <- function(x, y, k, nlag, samples = 10000, thin = 1){
+  # truncate the last nlag values of y
+  if(length(x) == length(y)) y <- y[(nlag + 1):length(y)]
+  
   # construct the lag matrix
   lag_mat       <- lag_matrix(x, p = nlag)
 

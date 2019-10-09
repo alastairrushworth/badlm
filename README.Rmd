@@ -8,6 +8,11 @@ knitr::opts_chunk$set(
 )
 ```
 
+Overview 
+---
+
+`badlm` is a small R package for inferring the temporally delayed dependence between a predictor and a response variable.  
+
 
 Installation 
 ---
@@ -51,16 +56,13 @@ deaths        <- deaths.sig + rnorm(450, sd = 0.01)
 Try to recover the distribution lag function
 ```{r, cache = TRUE, results='hide'}
 dlm_est <- badlm(x = expose, y = deaths, 
-           nlag = 50, k = 30, samples = 1000)
+           nlag = 50, k = 30, samples = 10000)
 ```
 
-Plot the result and compare to the truth
+Plot the resulting lag curve
 
 ```{r}
-plot(x, dlfunction, type = "l")
-lines(dlm_est$coefs$lag, dlm_est$coefs$beta, col ="red")
-lines(dlm_est$coefs$lag, dlm_est$coefs$upper, col = "gray60")
-lines(dlm_est$coefs$lag, dlm_est$coefs$lower, col = "gray60")
+plot_lagcurve(dlm_est)
 ```
 
 

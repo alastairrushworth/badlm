@@ -1,6 +1,10 @@
 
-Installation
-------------
+## Overview
+
+`badlm` is a small R package for inferring the temporally delayed
+dependence between a predictor and a response variable.
+
+## Installation
 
 To install the development version of the package, use
 
@@ -11,8 +15,7 @@ devtools::install_github("alastairrushworth/badlm")
 library(badlm)
 ```
 
-`badlm` example
----------------
+## `badlm` example
 
 Generate a distributed lag function
 
@@ -24,7 +27,7 @@ dlfunction <- -0.1 + (0.01*exp(-0.2*x) + exp(dnorm(x, sd = 4, mean = 10))) / 10
 plot(x, dlfunction, type = "l")
 ```
 
-![](man/figures/README-unnamed-chunk-4-1.png)
+![](man/figures/README-unnamed-chunk-4-1.png)<!-- -->
 
 Generate predictor and response under the distributed lag function
 
@@ -41,16 +44,13 @@ Try to recover the distribution lag function
 
 ``` r
 dlm_est <- badlm(x = expose, y = deaths, 
-           nlag = 50, k = 30, samples = 1000)
+           nlag = 50, k = 30, samples = 10000)
 ```
 
-Plot the result and compare to the truth
+Plot the resulting lag curve
 
 ``` r
-plot(x, dlfunction, type = "l")
-lines(dlm_est$coefs$lag, dlm_est$coefs$beta, col ="red")
-lines(dlm_est$coefs$lag, dlm_est$coefs$upper, col = "gray60")
-lines(dlm_est$coefs$lag, dlm_est$coefs$lower, col = "gray60")
+plot_lagcurve(dlm_est)
 ```
 
-![](man/figures/README-unnamed-chunk-7-1.png)
+![](man/figures/README-unnamed-chunk-7-1.png)<!-- -->

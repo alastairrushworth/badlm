@@ -1,3 +1,5 @@
+#' @export
+#' @useDynLib badlm
 # convolve the DL function with exposure to give outcome
 lag_matrix	<-	function(rain, p, start.at.zero = T){
   slider	<-	function(n)		rev(rain[n:(n+p-!start.at.zero)])

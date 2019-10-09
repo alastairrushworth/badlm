@@ -6,12 +6,11 @@ gaussian_badlm <- function(X, y, samples, burnin = 0, thin = 1){
 
   ncolX  <- ncol(X)
   nrowX  <- nrow(X)
-  deaths <- y
   XTX    <- crossprod(X)
   D      <- diff(diag(ncolX), diff = 1)
   P      <- crossprod(D)
-  Xy     <- t(X) %*% deaths
-  yX     <- t(deaths) %*% X
+  Xy     <- t(X) %*% y
+  yX     <- t(y) %*% X
 
   sig_store  <- vector("numeric", length = n.save)
   max_store  <- vector("numeric", length = n.save)
@@ -66,7 +65,7 @@ gaussian_badlm <- function(X, y, samples, burnin = 0, thin = 1){
 
     # update sigma
     a      <- 0.001 + nrowX/2
-    b      <- 0.001 + sum((deaths - (X %*% beta))^2)/2
+    b      <- 0.001 + sum((y - (X %*% beta))^2)/2
     sigma  <- 1/rgamma(1, shape = a, scale = 1/b)
 
     # update eta
@@ -98,8 +97,6 @@ gaussian_badlm <- function(X, y, samples, burnin = 0, thin = 1){
         a.P[j]       <- a.P[j] + 1
       }
     }
-
-
     if(save.iter){
       gam_store[increment, ] <- g
       bet_store[increment, ] <- beta

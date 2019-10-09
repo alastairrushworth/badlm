@@ -2,6 +2,6 @@
 # Generator token: 10BE3573-1514-4C36-9D1C-5A225CD40393
 
 xQx1 <- function(Q, x) {
-    .Call(`_badlm_xQx1`, Q, x)
+    .Call('_badlm_xQx1', PACKAGE = 'badlm', Q, x)
 }
 

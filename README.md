@@ -2,7 +2,8 @@
 ## Overview
 
 `badlm` is a small R package for inferring the temporally delayed
-dependence between a predictor and a response variable.
+dependence between a predictor and a response variable.  See the paper  
+  - Rushworth, A. _Bayesian adaptive distributed lag models._ (2018). [Arxiv link.](https://alastairrushworth.github.io/papers/bayesian_dlms.pdf)
 
 ## Installation
 

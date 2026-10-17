@@ -16,6 +16,7 @@
 \newcommand{\bD}{\mathbf{D}}
 \newcommand{\bS}{\mathbf{S}}
 \newcommand{\bI}{\mathbf{I}}
+\newcommand{\bA}{\mathbf{A}}
 \newcommand{\blambda}{\bm{\lambda}}
 \newcommand{\btau}{\bm{\tau}}
 \newcommand{\bbeta}{\bm{\beta}}
@@ -218,7 +219,10 @@ $(B_1(p), \ldots, B_K(p))$ is appended to $\bX$ together with a zero response,
 which contributes the factor $\exp\{-\beta_p^2 / (2\sigma^2)\}$ to the
 posterior and so shrinks the final value of the lag curve towards zero at the
 scale of the error variance, without introducing an additional tuning
-parameter.
+parameter. Alternatively the constraint $\beta_p = 0$, optionally together with
+$\beta'_p = 0$, can be imposed exactly by restricting $\bb$ to the null space
+of the constraint rows, which leaves the generalised determinant above
+unchanged up to a constant; this is the default in the accompanying software.
 
 A further smoothing prior distribution is placed over $\blambda$ to restrict
 their flexibility. This is particularly attractive as it also reflects our
@@ -251,23 +255,34 @@ distributions.
 Inference for the models fitted in the simulation study in Section
 \ref{sec:sim} was achieved using Markov chain Monte Carlo (MCMC) simulation
 using a mixture of Gibbs sampling and Metropolis--Hastings steps, implemented
-in R \citep{rcore2016}. The full conditional distributions of $\bb$,
-$\sigma^2$ and $\zeta^2$ are Gaussian and inverse-gamma respectively, and
-each $\tau_k$ is updated by a random-walk Metropolis step whose scale is tuned
-during burn-in. The Metropolis acceptance ratio requires the normalising
-constant of $\pi(\bb \mid \blambda)$, which for an intrinsic prior is the
-generalised determinant of $\bQ$, the product of its non-zero eigenvalues.
-Since the pairs $(b_k, b_{k+1})$ penalised by $\bQ$ form a chain, the
-matrix-tree theorem gives $|\bQ|_{+} = K \prod_{k=1}^{K-1} \lambda_k$, so that
+in R \citep{rcore2016}. The accompanying software, the Python package
+\texttt{badlm} (\url{https://github.com/alastairrushworth/badlm}), uses a
+different scheme that is considerably more efficient. Given $\btau$ and
+$\sigma^2$ the model is linear and Gaussian, so $\bb$ can be integrated out
+analytically: with $\bA = \bQ + \bX^\top \bX / \sigma^2$ and $\mathbf{m} =
+\bX^\top \by / \sigma^2$,
 \begin{equation*}
-\log \pi(\bb \mid \blambda) = \frac{1}{2} \sum_{k=1}^{K-1} \tau_k
-- \frac{1}{2} \sum_{k=1}^{K-1} \lambda_k (b_{k+1} - b_k)^2 + \text{const},
+\log p(\by \mid \btau, \sigma^2) = -\frac{n}{2} \log (2\pi\sigma^2)
++ \frac{1}{2} \log |\bQ|_{+} - \frac{1}{2} \log |\bA|
++ \frac{1}{2} \mathbf{m}^\top \bA^{-1} \mathbf{m}
+- \frac{\by^\top \by}{2\sigma^2},
 \end{equation*}
-and the update of each $\tau_k$ costs $O(1)$ operations. The adaptive model is
-available in the R package \texttt{badlm}
-(\url{https://github.com/alastairrushworth/badlm}); the models can also be
-implemented using standard Bayesian model fitting software such as Stan
-\citep{carpenter2016}.
+where $|\bQ|_{+}$ is the generalised determinant of the intrinsic prior
+precision, the product of its non-zero eigenvalues. Since the pairs $(b_k,
+b_{k+1})$ penalised by $\bQ$ form a chain, the matrix-tree theorem gives
+$|\bQ|_{+} = K \prod_{k=1}^{K-1} \lambda_k$, so this term is simply $\log K +
+\sum_k \tau_k$. The resulting marginal posterior of $(\btau, \sigma^2)$ is
+smooth and low dimensional, and is sampled with the No-U-Turn Sampler
+\citep{hoffman2014} using automatic differentiation; $\bb$ is then drawn from
+its Gaussian conditional distribution for each retained draw. Collapsing
+removes the strong dependence between $\bb$ and $\btau$ that slows a Gibbs
+sampler, and each likelihood evaluation costs $O(K^3)$ regardless of $n$
+because only the sufficient statistics $\bX^\top \bX$ and $\bX^\top \by$ are
+needed. The software also provides a Gibbs sampler with slice updates of
+$\btau$ as an independent check, a Laplace approximation to the collapsed
+posterior that serves as a fast approximate fit and as the starting point of
+the chains, an exact version of the end constraint, AR(1) errors and
+Poisson and negative binomial responses.
 
 \section{Simulation study}
 \label{sec:sim}

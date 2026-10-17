@@ -1,0 +1,5 @@
+^README\.Rmd$
+^\.Rbuildignore$
+^paper$
+^.*\.Rproj$
+^\.Rproj\.user$

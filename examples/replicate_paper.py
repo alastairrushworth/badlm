@@ -4,7 +4,9 @@ against the non-adaptive model (M1) on five lag-curve shapes.
 Usage: python examples/replicate_paper.py [n_reps]
 
 The published curves are not available in closed form, so
-``badlm.paper_lag_curves`` provides approximations with the same features.
+``badlm.paper_lag_curves`` provides approximations with the same features, and
+the exposure is standardised with noise sd 0.02 so that the non-adaptive model
+reaches effective degrees of freedom comparable to those reported in the paper.
 RMSE and squared bias are scaled by 1e3 as in Table 1 of the paper.
 """
 import sys
@@ -23,7 +25,7 @@ for cname, truth in curves.items():
     for mname, cfg in models.items():
         rmse, bias, ed = [], [], []
         for r in range(n_reps):
-            x, y = simulate_dlm(truth, n=500, seed=1000 * r + 7)
+            x, y = simulate_dlm(truth, n=500, standardize_x=True, sd_eps=0.02, seed=1000 * r + 7)
             m = BADLM(nlag=50, k=34, **cfg).fit(x, y, samples=500, warmup=500, chains=2, seed=r)
             est = m.summary_.mean
             rmse.append(np.sqrt(np.mean((est - truth) ** 2)))

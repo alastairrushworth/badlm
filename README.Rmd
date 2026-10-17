@@ -11,8 +11,18 @@ knitr::opts_chunk$set(
 Overview 
 ---
 
-`badlm` is a small R package for inferring the temporally delayed dependence between a predictor and a response variable.  
+`badlm` is a small R package for inferring the temporally delayed dependence
+between a predictor and a response variable. It fits the Bayesian adaptive
+distributed lag model described in
 
+  - Rushworth, A. _Bayesian adaptive distributed lag models._ (2018). [arXiv:1801.06670.](https://arxiv.org/abs/1801.06670)
+
+The lag curve is represented by a B-spline basis whose coefficients receive a
+first-difference penalty with lag-varying precision. The log precisions are
+themselves smoothed by a random walk prior, so the amount of smoothing adapts
+to the shape of the lag curve and the maximum lag can be chosen generously
+without overfitting. A copy of the paper source is kept in the `paper/`
+directory of this repository.
 
 Installation 
 ---
@@ -27,6 +37,7 @@ library(badlm)
 
 ```{r, echo = FALSE, warning=FALSE, message=F}
 library(badlm)
+set.seed(2018)
 ```
 
 
@@ -35,7 +46,7 @@ library(badlm)
 
 
 Generate a distributed lag function
-```{r, cache = TRUE}
+```{r lagfun, cache = FALSE}
 # a nice distributed lag function - hump
 x          <- 0:50
 dlfunction <- -0.1 + (0.01*exp(-0.2*x) + exp(dnorm(x, sd = 4, mean = 10))) / 10
@@ -44,8 +55,8 @@ plot(x, dlfunction, type = "l")
 ```
 
 Generate predictor and response under the distributed lag function
-```{r, cache = TRUE}
-# response is an AR(1) process
+```{r simulate, cache = FALSE}
+# exposure is an AR(1) process
 expose        <- arima.sim(model = list(ar = 0.5), n = 500, sd = 0.1)
 expose        <- (expose - mean(expose)) / sd(expose)
 lag_mat       <- lag_matrix(expose, p = 50)
@@ -53,16 +64,24 @@ deaths.sig    <- lag_mat %*% dlfunction
 deaths        <- deaths.sig + rnorm(450, sd = 0.01)
 ```
 
-Try to recover the distribution lag function
-```{r, cache = TRUE, results='hide'}
+Try to recover the distributed lag function. The first half of the iterations
+is discarded as burn-in by default; Metropolis proposals are tuned only during
+that period.
+```{r fit, cache = FALSE, results='hide'}
 dlm_est <- badlm(x = expose, y = deaths, 
            nlag = 50, k = 30, samples = 10000)
 ```
 
-Plot the resulting lag curve
-
-```{r}
-plot_lagcurve(dlm_est)
+The fitted object holds pointwise posterior summaries of the lag curve, the
+posterior draws of the curve itself, and draws of the effective degrees of
+freedom of the fit.
+```{r summary}
+head(dlm_est$coefs)
+mean(dlm_est$ed)
 ```
 
+Plot the resulting lag curve
 
+```{r lagcurve}
+plot_lagcurve(dlm_est)
+```

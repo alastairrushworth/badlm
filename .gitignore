@@ -1,0 +1,13 @@
+__pycache__/
+*.pyc
+*.egg-info/
+build/
+dist/
+.pytest_cache/
+.venv/
+*.aux
+*.bbl
+*.blg
+*.log
+*.out
+*.synctex.gz

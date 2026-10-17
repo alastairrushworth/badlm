@@ -27,7 +27,14 @@ These bring the paper into line with the `badlm` package.
 - The B-spline basis is described as uniformly spaced over the lag range
   `0, ..., p` rather than "over the range of x".
 - The sentence crediting a mixture of R and C++ (Rcpp) code is replaced by a
-  reference to the `badlm` package, which is now pure R.
+  description of the inference scheme used by the Python package `badlm`:
+  the spline coefficients are integrated out analytically and the
+  low-dimensional marginal posterior of the log precisions and error variance
+  is sampled with the No-U-Turn Sampler. The paragraph also notes the Gibbs
+  sampler, Laplace approximation, exact end constraint, AR(1) errors and count
+  responses that the software provides.
+- A sentence notes that the end constraint can be imposed exactly through a
+  null-space restriction, the software's default.
 
 ## Corrections
 

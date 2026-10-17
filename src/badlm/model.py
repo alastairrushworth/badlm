@@ -99,12 +99,14 @@ class BADLM:
     # ----------------------------------------------------------------- fitting
     def fit(self, x, y, covariates=None, offset=None, *, samples=2000, warmup=1000, chains=4,
             seed=0, thin=1, chain_method="vectorized", target_accept=0.9, progress=False,
-            init="laplace"):
+            init="laplace", clear_jax_cache=True):
         """Fit the model.
 
         ``samples`` are retained per chain after ``warmup`` iterations. For
         ``sampler='nuts'`` the chain is initialised at the Laplace mode when
-        ``init='laplace'``.
+        ``init='laplace'``. Each fit compiles its own JAX executables; with
+        ``clear_jax_cache=True`` they are released afterwards so that long
+        simulation loops do not exhaust the compiler's memory.
         """
         from .numpyro_model import tau_basis_matrix
 
@@ -128,6 +130,11 @@ class BADLM:
         else:
             self._fit_counts(samples, warmup, chains, seed, thin, chain_method, target_accept, progress)
         self._postprocess()
+        if clear_jax_cache and self.sampler != "gibbs":
+            import jax
+
+            self.mcmc_ = None
+            jax.clear_caches()
         return self
 
     def _model_and_args(self):

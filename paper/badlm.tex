@@ -463,20 +463,21 @@ for 2007 to 2016, 2,306 trading days spanning the 2008 crisis. Figure
 \ref{fig:stocks} shows four lag curves. Panels (a) and (b) regress the next
 day's return on the preceding 20 days' returns, the linear information that a
 trading rule could exploit. For the index the curve is negative at lag one,
-LAG1_A per percentage point, and returns to zero within a week: a short-lived
-reversal with cumulative effect CUM_A and ED_A effective degrees of freedom.
-For Apple the curve is indistinguishable from zero at every lag, with ED_B
+$-0.10$ (95\% interval $-0.15$ to $-0.06$) per percentage point, and returns to zero within a week: a short-lived
+reversal with cumulative effect $-0.23$ ($-0.42$ to $-0.03$) and 5.7 effective degrees of freedom.
+For Apple the curve is indistinguishable from zero at every lag, with 2.7
 effective degrees of freedom; the adaptive smoother reports an absence of
 structure rather than inventing it. Panel (c) regresses the daily change in
 log VIX on the same day's and the preceding 60 days' index returns. The
-contemporaneous coefficient is LAG0_C, so implied volatility rises about
-LAG0_C_ABS per cent for each percentage point the index falls; it is followed
+contemporaneous coefficient is $-4.1$ ($-4.2$ to $-3.9$), so implied volatility rises about
+4 per cent for each percentage point the index falls; it is followed
 by a small positive rebound over the following week as the shock partly
 reverses, and by nothing beyond about ten days. Panel (d) regresses the log
 absolute return, a measure of realised volatility, on its own past over 100
-days. The curve decays slowly and remains positive throughout, the long memory
-of volatility, and the smoother describes 100 lags with ED_D effective degrees
-of freedom. In each panel the band widens where the data are least informative
+days. The curve is strongest at lags two to three, decays over about a month
+and remains small but mostly positive thereafter, the long memory of
+volatility; the cumulative elasticity is 0.84 (0.75 to 0.94) and the smoother
+describes 100 lags with 8.9 effective degrees of freedom. In each panel the band widens where the data are least informative
 and the curve is pinned to zero at the maximum lag.
 
 \begin{figure}[t]

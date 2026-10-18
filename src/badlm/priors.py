@@ -11,8 +11,12 @@ class Priors:
     """Hyperparameters of the model.
 
     * ``sigma2 ~ InverseGamma(sigma2_a, sigma2_b)``
-    * log precisions: ``mean(tau) ~ N(tau_level_mean, tau_level_sd^2)`` and
-      first differences ``tau_{k+1} - tau_k ~ N(0, zeta^2)``
+    * log precisions: the level ``mean(tau)`` has a penalised-complexity prior,
+      ``exp(-mean(tau) / 2) ~ Exponential(tau_level_rate)`` with
+      ``tau_level_rate = -log(tau_level_tail_prob) / tau_level_scale``, whose
+      density decays like ``exp(-tau / 2)`` for large precisions and
+      double-exponentially for small ones; first differences
+      ``tau_{k+1} - tau_k ~ N(0, zeta^2)``
     * ``zeta ~ Exponential(zeta_rate)``, a penalised-complexity prior that shrinks
       towards the non-adaptive model; ``zeta_rate = -log(zeta_tail_prob) / zeta_scale``
       gives ``P(zeta > zeta_scale) = zeta_tail_prob``.
@@ -23,8 +27,8 @@ class Priors:
 
     sigma2_a: float = 0.001
     sigma2_b: float = 0.001
-    tau_level_mean: float = 5.0
-    tau_level_sd: float = 5.0
+    tau_level_scale: float = 1.0
+    tau_level_tail_prob: float = 0.05
     zeta_scale: float = 2.0
     zeta_tail_prob: float = 0.1
     tau_basis: int = 6
@@ -35,6 +39,27 @@ class Priors:
     def zeta_rate(self):
         return -np.log(self.zeta_tail_prob) / self.zeta_scale
 
+    @property
+    def tau_level_rate(self):
+        return -np.log(self.tau_level_tail_prob) / self.tau_level_scale
+
+    @property
+    def tau_level_start(self):
+        """Prior median of the level, used as a starting value."""
+        return -2.0 * np.log(np.log(2.0) / self.tau_level_rate)
+
+
+# Log precisions above this value are treated as infinite smoothing: the
+# likelihood is exactly flat beyond it, which keeps the Cholesky factors of the
+# posterior precision well conditioned.
+TAU_CAP = 30.0
+
+
+def level_logprior(level, pri: Priors):
+    """Log density of the level of the log precisions (up to a constant),
+    including the Jacobian of ``sd = exp(-level / 2)``."""
+    return -pri.tau_level_rate * np.exp(-0.5 * level) - 0.5 * level
+
 
 def rw_logprior(tau, zeta, pri: Priors):
     """Log density of the mean-anchored random walk prior on the log precisions
@@ -43,7 +68,7 @@ def rw_logprior(tau, zeta, pri: Priors):
     kt = tau.size
     return (-(kt - 1) * np.log(zeta)
             - np.sum(np.diff(tau) ** 2) / (2.0 * zeta**2)
-            - (tau.mean() - pri.tau_level_mean) ** 2 / (2.0 * pri.tau_level_sd**2))
+            + level_logprior(tau.mean(), pri))
 
 
 def pc_logprior_logzeta(logzeta, pri: Priors):
@@ -57,7 +82,7 @@ def simulate_tau(rng, kt, pri: Priors, zeta=None):
     """Draw ``tau`` from its prior (used by the validation tests)."""
     if zeta is None:
         zeta = rng.exponential(1.0 / pri.zeta_rate)
-    level = rng.normal(pri.tau_level_mean, pri.tau_level_sd)
+    level = -2.0 * np.log(rng.exponential(1.0 / pri.tau_level_rate))
     inc = rng.normal(size=kt - 1)
     walk = np.concatenate([[0.0], np.cumsum(inc)])
     return level + zeta * (walk - walk.mean()), zeta

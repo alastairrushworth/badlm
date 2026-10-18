@@ -99,7 +99,7 @@ class BADLM:
     # ----------------------------------------------------------------- fitting
     def fit(self, x, y, covariates=None, offset=None, *, samples=2000, warmup=1000, chains=4,
             seed=0, thin=1, chain_method="vectorized", target_accept=0.9, progress=False,
-            init="laplace", clear_jax_cache=True):
+            init="laplace", clear_jax_cache=True, dense_mass=False, max_tree_depth=10):
         """Fit the model.
 
         ``samples`` are retained per chain after ``warmup`` iterations. For
@@ -116,6 +116,7 @@ class BADLM:
         self.std_: Standardizer = std
         self.C_ = tau_basis_matrix(self.struct.K_tau, self.priors.tau_basis) if self.tau_model == "basis" else None
         self.fit_info_ = {"sampler": self.sampler, "samples": samples, "warmup": warmup, "chains": chains}
+        self._nuts_opts = {"dense_mass": dense_mass, "max_tree_depth": max_tree_depth}
 
         if self.sampler == "gibbs":
             from .gibbs import run_gibbs
@@ -168,7 +169,8 @@ class BADLM:
         if self.sampler == "nuts":
             draws, extra, mcmc = run_nuts(model, args, samples=samples, warmup=warmup, chains=chains,
                                           seed=seed, chain_method=chain_method, target_accept=target_accept,
-                                          init_values=init_values, progress=progress, thin=thin)
+                                          init_values=init_values, progress=progress, thin=thin,
+                                          **self._nuts_opts)
             self.mcmc_ = mcmc
         else:
             draws, extra = lap_draws, {}
@@ -187,7 +189,7 @@ class BADLM:
         model, args = self._model_and_args()
         draws, extra, mcmc = run_nuts(model, args, samples=samples, warmup=warmup, chains=chains,
                                       seed=seed, chain_method=chain_method, target_accept=target_accept,
-                                      progress=progress, thin=thin)
+                                      progress=progress, thin=thin, **self._nuts_opts)
         self.mcmc_ = mcmc
         self.draws_, self.extra_ = draws, extra
 

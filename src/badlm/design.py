@@ -102,10 +102,15 @@ class Structure:
 
     def lam_matrix(self, tau):
         """Prior precision ``D_r' diag(exp(tau)) D_r`` of the reduced coefficients."""
-        return (self.D_r.T * np.exp(tau)) @ self.D_r
+        from .priors import TAU_CAP
+
+        return (self.D_r.T * np.exp(np.minimum(tau, TAU_CAP))) @ self.D_r
 
     def logdet_prior(self, tau):
         """Generalised log-determinant of the prior precision as a function of tau."""
+        from .priors import TAU_CAP
+
+        tau = np.minimum(tau, TAU_CAP)
         if self.m <= 1:
             return self.logdet_const + float(np.sum(tau))
         return float(np.linalg.slogdet(self.lam_matrix(tau))[1])

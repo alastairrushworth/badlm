@@ -18,7 +18,7 @@ def _sym(a):
 def test_sbc_collapsed_nuts():
     rng = np.random.default_rng(2018)
     p, K = 10, 7
-    pri = Priors(sigma2_a=3.0, sigma2_b=2.0, tau_level_mean=1.0, tau_level_sd=1.0,
+    pri = Priors(sigma2_a=3.0, sigma2_b=2.0, tau_level_scale=0.5, tau_level_tail_prob=0.2,
                  zeta_scale=1.0, zeta_tail_prob=0.3)
     st = build_structure(p, K, end_constraint="zero")
     x = rng.normal(size=120)

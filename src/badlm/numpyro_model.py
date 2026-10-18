@@ -119,7 +119,7 @@ def count_model(L, W, y, offset, struct, family, tau_model, pri: Priors, C=None)
 
 def run_nuts(model, model_args, *, samples=2000, warmup=1000, chains=4, seed=0,
              chain_method="vectorized", target_accept=0.9, init_values=None, progress=False,
-             thin=1, dense_mass=False, max_tree_depth=10):
+             thin=1, dense_mass=True, max_tree_depth=10):
     opts = dict(target_accept_prob=target_accept, dense_mass=dense_mass, max_tree_depth=max_tree_depth)
     if init_values:
         kernel = NUTS(model, init_strategy=init_to_value(values=init_values), **opts)

@@ -101,7 +101,8 @@ determinant used in the likelihood is unchanged.
 **Samplers.** `'nuts'` integrates the coefficients out and samples the log
 precisions, error variance and AR(1) coefficient with NUTS; each likelihood
 evaluation costs O(k^3) irrespective of the series length because only
-sufficient statistics are used. Chains start at the Laplace mode. `'gibbs'` is a
+sufficient statistics are used. Chains start at the Laplace mode and use a
+dense mass matrix by default (`dense_mass=False` switches it off). `'gibbs'` is a
 Gibbs sampler with slice updates and interweaving, kept as an independent check
 of the NUTS implementation. `'laplace'` draws from a Gaussian approximation at
 the mode and takes a few seconds.

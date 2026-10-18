@@ -133,18 +133,19 @@ settings:
 ![stock market lag curves](figures/stocks_lag_curves.png)
 
 - *(a)* Next-day S&P 500 return on the previous 20 days' returns: a short-lived
-  reversal, LAG1_A per percentage point at lag one and zero within a week, with
-  a cumulative effect of CUM_A and ED_A effective degrees of freedom.
-- *(b)* The same for Apple: indistinguishable from zero everywhere with ED_B
+  reversal, -0.10 (95% interval -0.15 to -0.06) per percentage point at lag one and zero within a week, with
+  a cumulative effect of -0.23 (-0.42 to -0.03) and 5.7 effective degrees of freedom.
+- *(b)* The same for Apple: indistinguishable from zero everywhere with 2.7
   effective degrees of freedom. The adaptive smoother reports an absence of
   structure rather than inventing it.
 - *(c)* Daily change in log VIX on the same day's and the previous 60 days' S&P
-  500 returns: implied volatility moves LAG0_C per cent for each percentage
-  point of index return on the day, rebounds slightly over the following week,
+  500 returns: implied volatility moves -4.1 (-4.2 to -3.9) per cent for each percentage
+  point of index return on the same day, rebounds slightly over the following week,
   and shows nothing beyond about ten days.
-- *(d)* Log absolute return on its own past over 100 days: the slow decay of
-  volatility clustering, positive throughout, described with ED_D effective
-  degrees of freedom.
+- *(d)* Log absolute return on its own past over 100 days: volatility
+  clustering, strongest at lags two to three, decaying over about a month and
+  small but mostly positive thereafter, with a cumulative elasticity of 0.84
+  (0.75 to 0.94) described by 8.9 effective degrees of freedom.
 
 **COVID-19 cases and deaths** (`python examples/covid.py [--negbin]`). Daily US
 deaths from June 2020 to March 2021 are regressed, on the log scale, on the

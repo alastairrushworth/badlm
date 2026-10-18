@@ -11,3 +11,5 @@ dist/
 *.log
 *.out
 *.synctex.gz
+
+examples/data/

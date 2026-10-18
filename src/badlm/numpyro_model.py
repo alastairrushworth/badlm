@@ -21,22 +21,29 @@ def tau_basis_matrix(kt, nb, deg=3):
     return bspline_basis(np.arange(kt, dtype=float), nseg=nb - deg, deg=deg, domain=(0.0, kt - 1.0))
 
 
+def sample_level(pri: Priors):
+    """Level of the log precisions: a penalised-complexity prior on the implied
+    standard deviation ``exp(-level / 2)`` of coefficient differences."""
+    sd = numpyro.sample("tau_level_sd", dist.Exponential(pri.tau_level_rate))
+    return numpyro.deterministic("tau_level", -2.0 * jnp.log(sd))
+
+
 def sample_tau(kt, tau_model, pri: Priors, C=None):
     """Sample the log precisions ``tau`` (length ``kt``) under one of the prior
     families. Random-walk increments use a non-centred parameterisation."""
     if tau_model == "constant":
-        level = numpyro.sample("tau_level", dist.Normal(pri.tau_level_mean, pri.tau_level_sd))
+        level = sample_level(pri)
         tau = jnp.full((kt,), level)
     elif tau_model in ("rw", "basis"):
         n_g = kt if tau_model == "rw" else C.shape[1]
-        level = numpyro.sample("tau_level", dist.Normal(pri.tau_level_mean, pri.tau_level_sd))
+        level = sample_level(pri)
         zeta = numpyro.sample("zeta", dist.Exponential(pri.zeta_rate))
         inc = numpyro.sample("tau_inc", dist.Normal(0.0, 1.0).expand([n_g - 1]))
         walk = jnp.concatenate([jnp.zeros(1), jnp.cumsum(inc)])
         g = level + zeta * (walk - walk.mean())
         tau = g if tau_model == "rw" else jnp.asarray(C) @ g
     elif tau_model == "monotone":
-        level = numpyro.sample("tau_level", dist.Normal(pri.tau_level_mean, pri.tau_level_sd))
+        level = sample_level(pri)
         zeta = numpyro.sample("zeta", dist.Exponential(pri.zeta_rate))
         e = numpyro.sample("tau_inc", dist.Exponential(1.0).expand([kt - 1]))
         tau = level + jnp.concatenate([jnp.zeros(1), jnp.cumsum(zeta * e)])
@@ -55,13 +62,14 @@ def ncp_init_values(kt, tau_model, pri: Priors, C=None, ar1=False):
     v = {"sigma2": 0.5}
     if ar1:
         v["phi"] = 0.0
+    level_sd = float(np.exp(-0.5 * pri.tau_level_start))
     if tau_model == "constant":
-        v["tau_level"] = pri.tau_level_mean
+        v["tau_level_sd"] = level_sd
     elif tau_model in ("rw", "basis"):
         n_g = kt if tau_model == "rw" else C.shape[1]
-        v.update({"tau_level": pri.tau_level_mean, "zeta": 0.5, "tau_inc": np.zeros(n_g - 1)})
+        v.update({"tau_level_sd": level_sd, "zeta": 0.5, "tau_inc": np.zeros(n_g - 1)})
     elif tau_model == "monotone":
-        v.update({"tau_level": pri.tau_level_mean, "zeta": 0.5, "tau_inc": np.full(kt - 1, 0.1)})
+        v.update({"tau_level_sd": level_sd, "zeta": 0.5, "tau_inc": np.full(kt - 1, 0.1)})
     elif tau_model == "horseshoe":
         v.update({"hs_global": 0.05, "hs_local": np.ones(kt)})
     return v
@@ -111,12 +119,12 @@ def count_model(L, W, y, offset, struct, family, tau_model, pri: Priors, C=None)
 
 def run_nuts(model, model_args, *, samples=2000, warmup=1000, chains=4, seed=0,
              chain_method="vectorized", target_accept=0.9, init_values=None, progress=False,
-             thin=1):
+             thin=1, dense_mass=False, max_tree_depth=10):
+    opts = dict(target_accept_prob=target_accept, dense_mass=dense_mass, max_tree_depth=max_tree_depth)
     if init_values:
-        kernel = NUTS(model, target_accept_prob=target_accept,
-                      init_strategy=init_to_value(values=init_values))
+        kernel = NUTS(model, init_strategy=init_to_value(values=init_values), **opts)
     else:
-        kernel = NUTS(model, target_accept_prob=target_accept)
+        kernel = NUTS(model, **opts)
     mcmc = MCMC(kernel, num_warmup=warmup, num_samples=samples, num_chains=chains,
                 chain_method=chain_method, progress_bar=progress, thinning=thin)
     mcmc.run(jax.random.PRNGKey(seed), *model_args, extra_fields=("diverging", "num_steps"))

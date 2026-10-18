@@ -84,10 +84,11 @@ BADLM(
 )
 ```
 
-**Priors on the log precisions.** `'rw'` is the random walk of the paper with a
-weakly informative prior on its level and a penalised-complexity (exponential)
-prior on its scale, so the model shrinks towards the non-adaptive fit unless the
-data ask for adaptivity. `'basis'` represents the log precisions with a handful
+**Priors on the log precisions.** `'rw'` is the random walk of the paper with
+penalised-complexity (exponential) priors on its scale and on the standard
+deviation implied by its level, so the model shrinks towards the non-adaptive
+fit unless the data ask for adaptivity, and the precision cannot drift to
+numerically meaningless values once the data stop informing it. `'basis'` represents the log precisions with a handful
 of B-splines, `'monotone'` forces smoothing to increase with lag, `'horseshoe'`
 uses independent local shrinkage of each difference, and `'constant'` is the
 non-adaptive model.

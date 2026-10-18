@@ -27,7 +27,7 @@ class GibbsSampler:
         self.interweave = interweave and struct.m <= 1
         kt = struct.K_tau
         # initial state: heavily smoothed curve
-        self.tau = np.full(kt, pri.tau_level_mean)
+        self.tau = np.full(kt, pri.tau_level_start)
         self.zeta = 0.5
         self.sigma2 = 1.0
         self.theta = np.zeros(self.K_r + self.q)

@@ -33,7 +33,7 @@ def _funcs(tau, zeta, sigma2, b):
 def test_getting_it_right(interweave):
     rng = np.random.default_rng(7 + int(interweave))
     st = build_structure(8, 6, end_constraint="zero")          # proper prior on b_r
-    pri = Priors(sigma2_a=3.0, sigma2_b=2.0, tau_level_mean=1.0, tau_level_sd=1.0,
+    pri = Priors(sigma2_a=3.0, sigma2_b=2.0, tau_level_scale=0.5, tau_level_tail_prob=0.2,
                  zeta_scale=1.0, zeta_tail_prob=0.3)
     x = rng.normal(size=30)
     data, _ = build_design(x, rng.normal(size=30), st, intercept=False, standardize=False)

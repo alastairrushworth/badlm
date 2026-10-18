@@ -17,6 +17,8 @@ from __future__ import annotations
 import jax.numpy as jnp
 from jax.scipy.linalg import cho_solve
 
+from .priors import TAU_CAP
+
 
 def suff_at(stats, phi):
     S = stats.S_a + phi * stats.S_b + phi**2 * stats.S_c
@@ -44,7 +46,10 @@ def logdet_prior(tau, struct):
 
 
 def collapsed_loglik(tau, sigma2, phi, stats, struct, q, ar1=False):
-    """Log marginal likelihood of the data given the hyperparameters."""
+    """Log marginal likelihood of the data given the hyperparameters. Log
+    precisions above ``TAU_CAP`` act as infinite smoothing: the likelihood is
+    exactly flat in them, so the prior alone governs that region."""
+    tau = jnp.minimum(tau, TAU_CAP)
     S, s, yy = suff_at(stats, phi)
     N = stats.N
     Q = prior_precision(tau, jnp.asarray(struct.D_r), q)
@@ -67,6 +72,7 @@ def collapsed_loglik(tau, sigma2, phi, stats, struct, q, ar1=False):
 def conditional_coefficients(tau, sigma2, phi, stats, struct, q, z):
     """Draw ``theta | tau, sigma2, phi, y`` given standard normal ``z``, and
     return the effective degrees of freedom ``tr[(S + sigma2 Q)^{-1} S]``."""
+    tau = jnp.minimum(tau, TAU_CAP)
     S, s, _ = suff_at(stats, phi)
     Q = prior_precision(tau, jnp.asarray(struct.D_r), q)
     A = Q + S / sigma2

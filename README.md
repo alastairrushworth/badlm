@@ -154,15 +154,19 @@ for the reporting pattern and AR(1) errors; the coefficients are elasticities.
 
 ![COVID-19 lag curve](figures/covid_lag_curve.png)
 
-The cumulative elasticity is CUM_COVID: a 10% rise in cases is followed by about
-a PCT_COVID% rise in deaths, the shortfall from one reflecting the falling case
+The cumulative elasticity is 0.74 (0.66 to 0.81): a 10% rise in cases is followed by about
+a 7% rise in deaths, the shortfall from one reflecting the falling case
 fatality ratio over the period. The curve peaks at about three weeks and is
 back at zero by five. Individual lags are poorly identified because the
 smoothed case series is collinear across lags: the data determine the total and
-the timing, the adaptive prior supplies the smoothness. A negative binomial
-model of the raw counts (`--negbin`) gives the same total and peak but samples
-far more slowly, since the dependence between the curve and its smoothing
-parameters cannot be integrated out in a count model.
+the timing, the adaptive prior supplies the smoothness. Deaths reported on
+Tuesday to Friday are about 2.5 times Sunday's. A negative binomial model of
+the raw counts (`--negbin`, dashed) agrees on the total, 0.73 (0.68 to 0.77),
+and on the peak, but its sampler did not converge properly (R-hat 1.4 and many
+divergent transitions): the dependence between the curve and its smoothing
+parameters that the Gaussian model integrates out remains in a count model.
+Treat count models with highly collinear lags as work in progress and prefer
+the Gaussian log-scale model when counts are large.
 
 ## Validation
 

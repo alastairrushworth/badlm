@@ -504,16 +504,21 @@ deaths, so the lag coefficients are elasticities. Weekday indicators absorb
 the day-of-week pattern in death reporting and the errors follow an AR(1)
 process to allow for the remaining serial correlation. Figure \ref{fig:covid}
 shows the data and the fitted curve with $p = 35$. The cumulative elasticity
-is CUM_COVID: a 10 per cent rise in cases is followed by roughly a PCT_COVID per
+is 0.74 (0.66 to 0.81): a 10 per cent rise in cases is followed by roughly a 7 per
 cent rise in deaths, the shortfall from one reflecting the fall in the case
 fatality ratio over the period. The curve rises to a peak at about three weeks
 and returns to zero by five, but the individual lag coefficients are poorly
 identified, because the smoothed case series is highly collinear across lags:
 the data determine the total and the timing, and the adaptive prior supplies
-the smoothness. A negative binomial model for the raw counts gives the same
-total elasticity, CUM_NB, and the same peak. It is far slower to sample,
-because the dependence between the curve and its smoothing parameters that
-the Gaussian model integrates out remains present in a count model.
+the smoothness. Deaths reported on Tuesday to Friday are about 2.5 times
+those reported on a Sunday. A negative binomial model for the raw counts,
+shown dashed in Figure \ref{fig:covid}, agrees on the total elasticity, 0.73
+(0.68 to 0.77), and on the peak, but its sampler did not converge
+satisfactorily, with many divergent transitions and $\hat{R}$ of 1.4: the
+dependence between the curve and its smoothing parameters that the Gaussian
+model integrates out remains present in a count model, and a collapsed or
+approximately collapsed scheme for count responses is a topic for further
+work.
 
 \begin{figure}[t]
 \centering

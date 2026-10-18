@@ -111,6 +111,14 @@ parameterisation of the coefficients and NUTS on the full posterior; an
 `offset` can be supplied to `fit`. Additional linear covariates are passed as
 `covariates`.
 
+**Performance note.** JAX runs each fit on all available cores, and two JAX
+processes on one machine slow each other down far more than they share: run
+simulation studies in one process, or start each worker with
+`XLA_FLAGS=--xla_cpu_multi_thread_eigen=false` and
+`intra_op_parallelism_threads=1` so that each is single-threaded. Each fit
+compiles its own executables and releases them afterwards
+(`clear_jax_cache=True`).
+
 ## Validation
 
 The test suite (`pytest`) checks the collapsed likelihood against brute-force

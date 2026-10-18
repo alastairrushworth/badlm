@@ -120,6 +120,49 @@ simulation studies in one process, or start each worker with
 compiles its own executables and releases them afterwards
 (`clear_jax_cache=True`).
 
+## Examples with real data
+
+Two scripts apply the model to public data, downloaded on first use into
+`examples/data/`.
+
+**Stock market data** (`python examples/stocks.py`). Prices are transformed to
+percentage log returns, `r_t = 100 log(P_t / P_{t-1})`, for the S&P 500, Apple
+and the VIX over 2007 to 2016, and four lag curves are fitted with the default
+settings:
+
+![stock market lag curves](figures/stocks_lag_curves.png)
+
+- *(a)* Next-day S&P 500 return on the previous 20 days' returns: a short-lived
+  reversal, LAG1_A per percentage point at lag one and zero within a week, with
+  a cumulative effect of CUM_A and ED_A effective degrees of freedom.
+- *(b)* The same for Apple: indistinguishable from zero everywhere with ED_B
+  effective degrees of freedom. The adaptive smoother reports an absence of
+  structure rather than inventing it.
+- *(c)* Daily change in log VIX on the same day's and the previous 60 days' S&P
+  500 returns: implied volatility moves LAG0_C per cent for each percentage
+  point of index return on the day, rebounds slightly over the following week,
+  and shows nothing beyond about ten days.
+- *(d)* Log absolute return on its own past over 100 days: the slow decay of
+  volatility clustering, positive throughout, described with ED_D effective
+  degrees of freedom.
+
+**COVID-19 cases and deaths** (`python examples/covid.py [--negbin]`). Daily US
+deaths from June 2020 to March 2021 are regressed, on the log scale, on the
+seven-day mean of new cases over the previous 35 days, with weekday indicators
+for the reporting pattern and AR(1) errors; the coefficients are elasticities.
+
+![COVID-19 lag curve](figures/covid_lag_curve.png)
+
+The cumulative elasticity is CUM_COVID: a 10% rise in cases is followed by about
+a PCT_COVID% rise in deaths, the shortfall from one reflecting the falling case
+fatality ratio over the period. The curve peaks at about three weeks and is
+back at zero by five. Individual lags are poorly identified because the
+smoothed case series is collinear across lags: the data determine the total and
+the timing, the adaptive prior supplies the smoothness. A negative binomial
+model of the raw counts (`--negbin`) gives the same total and peak but samples
+far more slowly, since the dependence between the curve and its smoothing
+parameters cannot be integrated out in a count model.
+
 ## Validation
 
 The test suite (`pytest`) checks the collapsed likelihood against brute-force

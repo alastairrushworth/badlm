@@ -99,7 +99,7 @@ class BADLM:
     # ----------------------------------------------------------------- fitting
     def fit(self, x, y, covariates=None, offset=None, *, samples=2000, warmup=1000, chains=4,
             seed=0, thin=1, chain_method="vectorized", target_accept=0.9, progress=False,
-            init="laplace", clear_jax_cache=True, dense_mass=False, max_tree_depth=10):
+            init="laplace", clear_jax_cache=True, dense_mass=True, max_tree_depth=10):
         """Fit the model.
 
         ``samples`` are retained per chain after ``warmup`` iterations. For

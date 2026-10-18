@@ -6,6 +6,7 @@ import jax.numpy as jnp
 import numpy as np
 import numpyro
 import numpyro.distributions as dist
+from numpyro.distributions import constraints
 from numpyro.infer import MCMC, NUTS, init_to_value
 
 from .collapsed import collapsed_loglik, conditional_coefficients
@@ -82,31 +83,54 @@ def gaussian_model(stats, struct, q, ar1, tau_model, pri: Priors, C=None):
     numpyro.factor("loglik", collapsed_loglik(tau, sigma2, phi, stats, struct, q, ar1))
 
 
-def count_model(L, W, y, offset, struct, family, tau_model, pri: Priors, C=None):
-    """Poisson or negative binomial response with a non-centred parameterisation of
-    the spline coefficients: increments ``d_k = exp(-tau_k / 2) w_k``."""
+def count_model(L, W, y, offset, struct, family, tau_model, pri: Priors, C=None,
+                parameterization="centred"):
+    """Poisson or negative binomial response.
+
+    ``parameterization='centred'`` samples the reduced coefficients directly
+    under their Gaussian prior, which mixes well when the data are informative
+    about the curve; ``'noncentred'`` samples standard normal increments
+    ``w`` with ``d_k = exp(-tau_k / 2) w_k``, which is preferable when they are
+    not.
+    """
     kt = struct.K_tau
     tau = sample_tau(kt, tau_model, pri, C)
-    w = numpyro.sample("w", dist.Normal(0.0, 1.0).expand([kt]))
-    scale = jnp.exp(-0.5 * tau)
-    if struct.m == 2:
-        a = jnp.asarray(struct.a_slope) * scale
-        w = w - a * jnp.dot(a, w) / jnp.dot(a, a)
-    d = scale * w
-    b_raw = jnp.concatenate([jnp.zeros(1), jnp.cumsum(d)])
-    if struct.m == 0:
-        level = numpyro.sample("level", dist.Normal(0.0, pri.coef_sd))
+    D_r = jnp.asarray(struct.D_r)
+    Z = jnp.asarray(struct.Z)
+    if parameterization == "centred":
+        if struct.m >= 1:
+            Q_r = (D_r.T * jnp.exp(tau)) @ D_r
+            b_r = numpyro.sample("b_r", dist.MultivariateNormal(jnp.zeros(struct.K_r), precision_matrix=Q_r))
+        else:
+            b_r = numpyro.sample("b_r", dist.ImproperUniform(constraints.real, (), (struct.K_r,)))
+            numpyro.factor("b_prior", 0.5 * (struct.logdet_const + jnp.sum(tau))
+                           - 0.5 * jnp.sum(jnp.exp(tau) * (D_r @ b_r) ** 2))
+        b = Z @ b_r
+    elif parameterization == "noncentred":
+        w = numpyro.sample("w", dist.Normal(0.0, 1.0).expand([kt]))
+        scale = jnp.exp(-0.5 * tau)
+        if struct.m == 2:
+            a = jnp.asarray(struct.a_slope) * scale
+            w = w - a * jnp.dot(a, w) / jnp.dot(a, a)
+        d = scale * w
+        b_raw = jnp.concatenate([jnp.zeros(1), jnp.cumsum(d)])
+        if struct.m == 0:
+            level = numpyro.sample("level", dist.Normal(0.0, pri.coef_sd))
+        else:
+            level = -jnp.dot(jnp.asarray(struct.C[0]), b_raw)
+        b = level + b_raw
+        b_r = Z.T @ b
     else:
-        level = -jnp.dot(jnp.asarray(struct.C[0]), b_raw)
-    b = level + b_raw
+        raise ValueError("parameterization must be 'centred' or 'noncentred'")
     beta = numpyro.deterministic("beta", jnp.asarray(struct.B) @ b)
     eta = jnp.asarray(L) @ beta + jnp.asarray(offset)
     q = W.shape[1]
     if q:
         gamma = numpyro.sample("gamma", dist.Normal(0.0, pri.coef_sd).expand([q]))
         eta = eta + jnp.asarray(W) @ gamma
-    numpyro.deterministic("theta", jnp.concatenate([jnp.asarray(struct.Z).T @ b, gamma]) if q
-                          else jnp.asarray(struct.Z).T @ b)
+        numpyro.deterministic("theta", jnp.concatenate([b_r, gamma]))
+    else:
+        numpyro.deterministic("theta", b_r)
     mean = jnp.exp(eta)
     if family == "poisson":
         numpyro.sample("y", dist.Poisson(mean), obs=jnp.asarray(y))

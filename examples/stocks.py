@@ -7,8 +7,8 @@ and four questions are asked of the S&P 500, Apple and the VIX, 2007-2016:
 (b) the same for Apple;
 (c) how does implied volatility (the daily change in log VIX) respond to S&P
     500 returns on the same day and the 60 days before;
-(d) how does today's absolute return depend on the last 100 days of absolute
-    returns (volatility clustering).
+(d) how does today's log absolute return (a measure of realised volatility)
+    depend on the last 100 days of log absolute returns (volatility clustering).
 
 Run: python examples/stocks.py
 """
@@ -57,20 +57,24 @@ fits["a"] = BADLM(nlag=20, k=14).fit(r_sp[:-1], r_sp[1:], **mcmc)
 fits["b"] = BADLM(nlag=20, k=14).fit(r_aapl[:-1], r_aapl[1:], **mcmc)
 # (c): contemporaneous and lagged response of implied volatility to returns
 fits["c"] = BADLM(nlag=60, k=40).fit(r_sp, d_lvix, **mcmc)
-# (d): volatility clustering, |r_{t+1}| on |r_t|, ..., |r_{t-100}|
-a_sp = np.abs(r_sp)
-fits["d"] = BADLM(nlag=100, k=68).fit(a_sp[:-1], a_sp[1:], **mcmc)
+# (d): volatility clustering, log|r_{t+1}| on log|r_t|, ..., log|r_{t-100}|; the log
+# transform tames the heavy tails of absolute returns (0.1% added to avoid log 0)
+la_sp = np.log(np.abs(r_sp) + 0.1)
+fits["d"] = BADLM(nlag=100, k=68).fit(la_sp[:-1], la_sp[1:], **mcmc)
 print(f"four fits in {time.time() - t0:.0f}s")
 
 titles = {
     "a": "(a) S&P 500: next-day return on past returns",
     "b": "(b) Apple: next-day return on past returns",
     "c": "(c) Change in log VIX on S&P 500 returns",
-    "d": "(d) S&P 500: absolute return on past absolute returns",
+    "d": "(d) S&P 500: log absolute return on its own past",
 }
 xlab = {"a": "lag (days before the predicted day)", "b": "lag (days before the predicted day)",
         "c": "lag (days)", "d": "lag (days before the predicted day)"}
 
+for key, lag in (("a", 0), ("c", 0), ("c", 1), ("d", 0)):
+    s = fits[key].summary_
+    print(f"panel {key}, x lag {lag}: median {s.median[lag]:.3f} ({s.lower[lag]:.3f}, {s.upper[lag]:.3f})")
 print("\n| Panel | Cumulative effect (95% interval) | ED | Peak lag | Effective lag length | max R-hat | Divergences |")
 print("|---|---|---|---|---|---|---|")
 for key, m in fits.items():
@@ -93,7 +97,7 @@ for ax, key in zip(axes.ravel(), fits):
     plot_lag_curve(shifted, ax=ax, title=titles[key])
     ax.set_xticks(np.linspace(shifted.lag[0], shifted.lag[-1], 6).round())
     ax.set_xlabel(xlab[key])
-    ax.set_ylabel("coefficient (% per %)")
+    ax.set_ylabel("elasticity" if key == "d" else "coefficient (% per %)")
     ax.get_legend().remove()
 axes[0, 0].legend(frameon=False, loc="upper right")
 fig.tight_layout()

@@ -139,9 +139,11 @@ regularisation and smoothing. A new DLM is described in Section
 illustrates the DLM's desirable properties, especially in comparison to
 existing approaches. This study compares bias resulting from getting $p$
 wrong, which is itself a central contribution, as DLMs have not previously
-been compared in this manner. Section \ref{sec:discussion} concludes the paper
-with an overview of the main findings and a discussion of the implications for
-users of distributed lag models.
+been compared in this manner. Section \ref{sec:real} applies the model
+to two real data sets, daily stock market returns and COVID-19 cases and deaths.
+Section \ref{sec:discussion} concludes the paper with an overview of the main
+findings and a discussion of the implications for users of distributed lag
+models.
 
 \section{Adaptive distributed lag models}
 \label{sec:model}
@@ -442,6 +444,87 @@ not constant and do increase modestly with $p$, from 6.7 ($p = 50$) to 7.4
 between RMSE and degrees of freedom, reinforcing the suggestion that adaptive
 models are preferable choices.
 
+\section{Illustrations with real data}
+\label{sec:real}
+
+Two applications illustrate how the adaptive lag curve behaves on noisy real
+data. Both use the accompanying software with its default settings: the random
+walk prior on the log precisions, an exact zero constraint at the maximum lag,
+$K = \lceil 2(p+1)/3 \rceil$ basis functions, and the collapsed NUTS sampler
+with two chains of 1000 retained draws. The scripts that reproduce them are in
+the software repository.
+
+\subsection{Daily stock market data}
+
+Prices are not stationary, so they are transformed to percentage log returns
+$r_t = 100 \log(P_t / P_{t-1})$. Daily closing prices of the S\&P 500 index and
+of Apple, and closing values of the VIX implied volatility index, were obtained
+for 2007 to 2016, 2,306 trading days spanning the 2008 crisis. Figure
+\ref{fig:stocks} shows four lag curves. Panels (a) and (b) regress the next
+day's return on the preceding 20 days' returns, the linear information that a
+trading rule could exploit. For the index the curve is negative at lag one,
+LAG1_A per percentage point, and returns to zero within a week: a short-lived
+reversal with cumulative effect CUM_A and ED_A effective degrees of freedom.
+For Apple the curve is indistinguishable from zero at every lag, with ED_B
+effective degrees of freedom; the adaptive smoother reports an absence of
+structure rather than inventing it. Panel (c) regresses the daily change in
+log VIX on the same day's and the preceding 60 days' index returns. The
+contemporaneous coefficient is LAG0_C, so implied volatility rises about
+LAG0_C_ABS per cent for each percentage point the index falls; it is followed
+by a small positive rebound over the following week as the shock partly
+reverses, and by nothing beyond about ten days. Panel (d) regresses the log
+absolute return, a measure of realised volatility, on its own past over 100
+days. The curve decays slowly and remains positive throughout, the long memory
+of volatility, and the smoother describes 100 lags with ED_D effective degrees
+of freedom. In each panel the band widens where the data are least informative
+and the curve is pinned to zero at the maximum lag.
+
+\begin{figure}[t]
+\centering
+\includegraphics[width=\textwidth]{figures/stocks_lag_curves.pdf}
+\caption{Lag curves for daily stock market data, 2007 to 2016: posterior
+medians with 95\% credible bands. (a) Next-day S\&P 500 return on the previous
+20 days' returns; (b) the same for Apple; (c) daily change in log VIX on
+contemporaneous and lagged S\&P 500 returns; (d) log absolute S\&P 500 return
+on its own past over 100 days.}
+\label{fig:stocks}
+\end{figure}
+
+\subsection{COVID-19 cases and deaths}
+
+Deaths from COVID-19 follow infections after a delay of a few weeks, so the
+lag curve relating daily deaths to earlier cases estimates both the size of
+the relationship and the shape of the delay. Daily counts for the United
+States from June 2020 to March 2021, 304 days with a mean of 1,471 deaths per
+day, were taken from the compilation by The New York Times; the period
+precedes any effect of vaccination on the case fatality ratio. The exposure is
+the log of the seven-day trailing mean of new cases and the response is log
+deaths, so the lag coefficients are elasticities. Weekday indicators absorb
+the day-of-week pattern in death reporting and the errors follow an AR(1)
+process to allow for the remaining serial correlation. Figure \ref{fig:covid}
+shows the data and the fitted curve with $p = 35$. The cumulative elasticity
+is CUM_COVID: a 10 per cent rise in cases is followed by roughly a PCT_COVID per
+cent rise in deaths, the shortfall from one reflecting the fall in the case
+fatality ratio over the period. The curve rises to a peak at about three weeks
+and returns to zero by five, but the individual lag coefficients are poorly
+identified, because the smoothed case series is highly collinear across lags:
+the data determine the total and the timing, and the adaptive prior supplies
+the smoothness. A negative binomial model for the raw counts gives the same
+total elasticity, CUM_NB, and the same peak. It is far slower to sample,
+because the dependence between the curve and its smoothing parameters that
+the Gaussian model integrates out remains present in a count model.
+
+\begin{figure}[t]
+\centering
+\includegraphics[width=\textwidth]{figures/covid_lag_curve.pdf}
+\caption{COVID-19 in the United States, June 2020 to March 2021. (a)
+Seven-day mean of new cases; (b) daily deaths; (c) elasticity of deaths to
+cases at lags 0 to 35 under the Gaussian model for log deaths with AR(1)
+errors (posterior median and 95\% band) and under a negative binomial model
+for the counts (dashed).}
+\label{fig:covid}
+\end{figure}
+
 \section{Discussion}
 \label{sec:discussion}
 
@@ -453,9 +536,14 @@ underlying lag function is identical, which suggests that the interpretation
 of lag estimates should be made with caution. A new model has been proposed
 that combines automatic adaptive smoothing with a pragmatically large choice
 of $p$ to ensure simple and flexible smoothing of the lag curve that avoids
-sensitivity to the choice of $p$. The new approach provides users of DLMs with
-a new way to explore their data with confidence that the estimates are not
-contaminated by artefacts that result from particular model choices.
+sensitivity to the choice of $p$. The real data illustrations in Section
+\ref{sec:real} show the adaptive curve reporting no structure where the data
+contain none, a sharp and short-lived response where there is one, and a
+slowly decaying response over a hundred lags, in each case with far fewer
+effective parameters than the number of lags. The new approach provides users
+of DLMs with a new way to explore their data with confidence that the
+estimates are not contaminated by artefacts that result from particular model
+choices.
 
 \bibliographystyle{plainnat}
 \bibliography{badlm}

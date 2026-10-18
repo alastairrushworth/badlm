@@ -68,6 +68,10 @@ class BADLM:
         hyperparameters; ``'gibbs'`` is a Gibbs/slice sampler (Gaussian, 'rw'
         only); ``'laplace'`` is a fast Gaussian approximation at the mode.
     priors : Priors
+    parameterization : {'centred', 'noncentred'}
+        For count families only: sample the spline coefficients directly
+        (``'centred'``, good when the data are informative) or as scaled
+        standard-normal increments (``'noncentred'``).
     """
 
     nlag: int
@@ -80,6 +84,7 @@ class BADLM:
     standardize: bool = True
     sampler: str = "nuts"
     priors: Priors = field(default_factory=Priors)
+    parameterization: str = "centred"
 
     def __post_init__(self):
         if self.k is None:
@@ -94,6 +99,8 @@ class BADLM:
             raise ValueError("ar1=True requires family='gaussian'")
         if self.sampler == "laplace" and self.family != "gaussian":
             raise ValueError("sampler='laplace' requires family='gaussian'")
+        if self.parameterization not in ("centred", "noncentred"):
+            raise ValueError("parameterization must be 'centred' or 'noncentred'")
         self.struct: Structure = build_structure(self.nlag, self.k, end_constraint=self.end_constraint)
 
     # ----------------------------------------------------------------- fitting
@@ -145,7 +152,7 @@ class BADLM:
             args = (self.data_.stats, self.struct, self.data_.q, self.ar1, self.tau_model, self.priors, self.C_)
             return gaussian_model, args
         args = (self.data_.L, self.data_.W, self.data_.y, self.data_.offset, self.struct, self.family,
-                self.tau_model, self.priors, self.C_)
+                self.tau_model, self.priors, self.C_, self.parameterization)
         return count_model, args
 
     def _fit_gaussian_collapsed(self, samples, warmup, chains, seed, thin, chain_method,

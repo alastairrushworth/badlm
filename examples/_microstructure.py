@@ -3,9 +3,9 @@
 The sample data shipped with the QuantConnect Lean repository hold every trade
 and quote update for SPY, BAC, AIG and IBM on 7 to 11 October 2013. For each
 regular-session second this module computes the national best bid and offer
-(the best bid and ask over the latest quote of each exchange, ignoring quotes
-older than ``QUOTE_EXPIRY`` seconds, since a venue that stops updating would
-otherwise leave a stale price in the book all day), the midquote
+(the best bid and ask over the latest quotes of the ``TOP_VENUES`` most active
+exchanges, ignoring quotes older than ``QUOTE_EXPIRY`` seconds; minor venues
+post stale or non-firm prices that would otherwise cross the book), the midquote
 return in basis points, the number and volume of buyer- and seller-initiated
 trades (trades above the prevailing midquote are buys, below are sells, and
 trades at the midquote are signed by the tick rule), and the quoted spread.
@@ -23,7 +23,8 @@ DATA_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "data")
 DAYS = ("20131007", "20131008", "20131009", "20131010", "20131011")
 OPEN_MS, CLOSE_MS = 34_200_000, 57_600_000           # 09:30 to 16:00
 N_SEC = (CLOSE_MS - OPEN_MS) // 1000
-QUOTE_EXPIRY = 60                                     # seconds a venue's quote stays valid
+QUOTE_EXPIRY = 5                                      # seconds a venue's quote stays valid
+TOP_VENUES = 4                                        # exchanges used for the best bid and offer
 URL = "https://raw.githubusercontent.com/QuantConnect/Lean/master/Data/equity/usa/tick/{sym}/{day}_{kind}.zip"
 
 
@@ -50,7 +51,10 @@ def process_day(sym, day):
     quotes["bid"] /= 1e4
     quotes["ask"] /= 1e4
 
-    # NBBO at the end of each second from the latest quote of every exchange
+    # best bid and offer at the end of each second from the most active venues
+    top = quotes.groupby("exch").size().nlargest(TOP_VENUES).index
+    quotes = quotes[quotes["exch"].isin(top)]
+
     def best(side, agg):
         q = quotes.loc[quotes[side] > 0, ["sec", "exch", side]]
         last = q.groupby(["sec", "exch"])[side].last().unstack("exch").reindex(range(N_SEC))
@@ -60,7 +64,7 @@ def process_day(sym, day):
 
     bid, ask = best("bid", "max"), best("ask", "min")
     mid = 0.5 * (bid + ask)
-    bad = ~np.isfinite(mid) | (bid >= ask)
+    bad = ~np.isfinite(mid) | (bid > ask)            # crossed; a locked market is kept
     mid[bad] = np.nan
     mid = pd.Series(mid).ffill().bfill().to_numpy()
     spread_bp = 1e4 * (ask - bid) / mid
@@ -109,6 +113,8 @@ if __name__ == "__main__":
 
     for sym in sys.argv[1:] or ["spy"]:
         d = load_symbol(sym)
+        imb = d["n_buy"] - d["n_sell"]
         print(f"{sym}: {d['mid'].size} seconds over {len(DAYS)} days; mean trades/s {d['n_trades'].mean():.1f}, "
               f"mean volume/s {d['volume'].mean():.0f}, mean spread {d['spread_bp'].mean():.2f} bp, "
-              f"return sd {d['ret_bp'].std():.2f} bp, imbalance sd {(d['n_buy'] - d['n_sell']).std():.2f}")
+              f"return sd {d['ret_bp'].std():.2f} bp, seconds with a midquote change {np.mean(d['ret_bp'] != 0):.2f}, "
+              f"corr(return, imbalance) {np.corrcoef(d['ret_bp'], imb)[0, 1]:.2f}, imbalance sd {imb.std():.2f}")

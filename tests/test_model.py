@@ -33,7 +33,7 @@ def test_nuts_recovers_lag_curve_and_summaries(hump_data):
     assert abs(m.peak_lag()["mode"] - 10) <= 2
     assert 5 <= m.effective_lag_length()["length"] <= 21
     ed = m.effective_df()
-    assert 1 < ed["mean"] < 12
+    assert 1 < ed["mean"] < 11
     text = m.summary()
     assert "cumulative effect" in text and "lag curve" in text
     df = m.lag_curve_summary().to_dataframe()

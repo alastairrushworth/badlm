@@ -134,8 +134,8 @@ settings:
 
 - *(a)* Next-day S&P 500 return on the previous 20 days' returns: a short-lived
   reversal, -0.10 (95% interval -0.15 to -0.06) per percentage point at lag one and zero within a week, with
-  a cumulative effect of -0.23 (-0.42 to -0.03) and 5.7 effective degrees of freedom.
-- *(b)* The same for Apple: indistinguishable from zero everywhere with 2.7
+  a cumulative effect of -0.23 (-0.42 to -0.03) and 4.7 effective degrees of freedom.
+- *(b)* The same for Apple: indistinguishable from zero everywhere with 1.7
   effective degrees of freedom. The adaptive smoother reports an absence of
   structure rather than inventing it.
 - *(c)* Daily change in log VIX on the same day's and the previous 60 days' S&P
@@ -145,7 +145,25 @@ settings:
 - *(d)* Log absolute return on its own past over 100 days: volatility
   clustering, strongest at lags two to three, decaying over about a month and
   small but mostly positive thereafter, with a cumulative elasticity of 0.84
-  (0.75 to 0.94) described by 8.9 effective degrees of freedom.
+  (0.75 to 0.94) described by 7.9 effective degrees of freedom.
+
+**Air pollution and mortality in Chicago** (`python examples/chicago.py`). Daily
+deaths in Chicago from 1987 to 2000 on 40 lags of PM10, adjusting for trend and
+season, weekday, temperature and dew point, with AR(1) errors; coefficients are
+percentage changes in deaths per 10 µg/m³. The data are the `chicagoNMMAPS`
+set from the dlnm R package, included in the repository.
+
+![Chicago lag curves](figures/chicago_lag_curves.png)
+
+- All-cause deaths rise by 0.15% per 10 µg/m³ on the day of exposure (-0.02 to
+  0.36) and fall by a similar amount around a week later, where the band lies
+  below zero, so the cumulative effect over 40 days is indistinguishable from
+  zero: -0.20% (-1.30 to 0.85). Deaths are brought forward by a few days rather
+  than added, the "mortality displacement" pattern discussed in the paper, and
+  the lag curve shows it directly without any lag structure specified in
+  advance. The curve uses about five effective degrees of freedom.
+- Cardiovascular deaths show the same shape with smaller amplitude.
+  Respiratory deaths, nine a day, are too few to show anything.
 
 **COVID-19 cases and deaths** (`python examples/covid.py [--negbin]`). Daily US
 deaths from June 2020 to March 2021 are regressed, on the log scale, on the
@@ -157,7 +175,7 @@ for the reporting pattern and AR(1) errors; the coefficients are elasticities.
 The cumulative elasticity is 0.74 (0.66 to 0.81): a 10% rise in cases is followed by about
 a 7% rise in deaths, the shortfall from one reflecting the falling case
 fatality ratio over the period. The curve peaks at about three weeks and is
-back at zero by five. Individual lags are poorly identified because the
+back at zero by five, and uses under three effective degrees of freedom. Individual lags are poorly identified because the
 smoothed case series is collinear across lags: the data determine the total and
 the timing, the adaptive prior supplies the smoothness. Deaths reported on
 Tuesday to Friday are about 2.5 times Sunday's. A negative binomial model of
@@ -186,25 +204,25 @@ paper. The published curves are not available in closed form, so
 
 With 10 replicates per scenario, the exposure standardised and noise sd 0.02
 (RMSE and squared bias scaled by 1e3, ED the posterior mean effective degrees
-of freedom):
+of freedom of the lag curve):
 
 | Lag curve | Summary | M1 | M3 |
 |---|---|---|---|
 | delayed_peak | RMSE | 0.55 | 0.36 |
 | delayed_peak | Bias2 | 0.00 | 0.00 |
-| delayed_peak | ED | 24.43 | 11.68 |
+| delayed_peak | ED | 23.43 | 10.68 |
 | decay_curve | RMSE | 0.44 | 0.34 |
 | decay_curve | Bias2 | 0.00 | 0.00 |
-| decay_curve | ED | 18.16 | 12.53 |
+| decay_curve | ED | 17.16 | 11.53 |
 | flat_response | RMSE | 0.13 | 0.13 |
 | flat_response | Bias2 | 0.00 | 0.00 |
-| flat_response | ED | 3.61 | 3.57 |
+| flat_response | ED | 2.61 | 2.57 |
 | displacement | RMSE | 0.56 | 0.42 |
 | displacement | Bias2 | 0.00 | 0.00 |
-| displacement | ED | 23.95 | 14.55 |
+| displacement | ED | 22.95 | 13.55 |
 | sharp_peak | RMSE | 0.81 | 0.35 |
 | sharp_peak | Bias2 | 0.00 | 0.00 |
-| sharp_peak | ED | 28.01 | 7.53 |
+| sharp_peak | ED | 27.01 | 6.53 |
 
 The adaptive model has lower RMSE and far fewer effective degrees of freedom
 in every non-null scenario, and both models correctly find almost no structure

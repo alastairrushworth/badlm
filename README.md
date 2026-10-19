@@ -147,6 +147,40 @@ settings:
   small but mostly positive thereafter, with a cumulative elasticity of 0.84
   (0.75 to 0.94) described by 7.9 effective degrees of freedom.
 
+**Intraday microstructure of SPY** (`python examples/microstructure.py`, needs
+pandas on the first run). Every trade and quote for SPY and BAC on 7 to 11
+October 2013, from the sample data in the QuantConnect Lean repository, reduced
+to one-second series: midquote returns in basis points from the best bid and
+offer of the four most active venues, order-flow imbalance (buyer- minus
+seller-initiated trades, signed against the prevailing midquote), volume and
+spread. Lags are formed within each day (`groups=day`) and B-splines of time of
+day absorb the intraday pattern.
+
+![microstructure lag curves](figures/microstructure_lag_curves.png)
+
+- *(a, b) Price impact.* One more buy than sell trade in a second moves the
+  midquote by 0.0061 bp in that second. The response keeps building for about
+  seven seconds, to 0.0093 bp, and then about 15% of it decays away over the
+  next minute, leaving a permanent impact of 0.0079 bp (0.0074 to 0.0084).
+  The decay is the transient component of impact that microstructure models
+  describe with a propagator; here its shape is estimated rather than assumed.
+- *(c, f) Memory of order flow.* The imbalance one second earlier predicts
+  the current imbalance with coefficient 0.16 for SPY and 0.11 for BAC, but
+  the tail is what matters: the coefficients over the following five minutes
+  sum to 0.38 for SPY and 0.57 for BAC, and BAC's curve stays positive to
+  about 100 s. Order flow in the large-tick stock is more persistent, as order
+  splitting in a deep queue predicts.
+- *(d) Volatility after volume.* A thousand shares traded a second earlier
+  raise the next second's absolute return by 0.001 bp, decaying over about a
+  minute with a secondary bump at six to seven seconds, the time the price
+  takes to absorb order flow in (b).
+- *(e) Volume after volatility.* One basis point of absolute return attracts
+  about 1,400 extra shares in the next second and roughly 22,000 over the
+  following two minutes.
+
+Each curve uses between 8 and 12 effective degrees of freedom for 120 to 300
+lags; all have R-hat at or below 1.03.
+
 **Air pollution and mortality in Chicago** (`python examples/chicago.py`). Daily
 deaths in Chicago from 1987 to 2000 on 40 lags of PM10, adjusting for trend and
 season, weekday, temperature and dew point, with AR(1) errors; coefficients are

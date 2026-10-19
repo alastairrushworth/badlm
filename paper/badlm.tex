@@ -495,6 +495,58 @@ on its own past over 100 days.}
 \label{fig:stocks}
 \end{figure}
 
+\subsection{Intraday order flow and prices}
+
+At the other extreme of time scale, the sample data distributed with the
+QuantConnect Lean repository contain every trade and quote for the exchange
+traded fund SPY and for the stock BAC on the five trading days from 7 to 11
+October 2013. They were reduced to one-second series: the midquote from the
+best bid and offer of the four most active venues, its return in basis
+points, the order-flow imbalance (the number of buyer-initiated minus
+seller-initiated trades, signed against the prevailing midquote), volume and
+the quoted spread. Lags were formed within each day, so that the first second
+of a day is never regressed on the previous afternoon, and B-splines of time
+of day entered as unpenalised terms to absorb the intraday pattern in volume
+and volatility. Each series has 117,000 seconds, and all fits took the
+default settings. Figure \ref{fig:micro} shows the results.
+
+Panel (a) regresses the midquote return on the order-flow imbalance of the
+same second and the 120 before it, and panel (b) shows the cumulative sum of
+these coefficients, the response of the price to one unit of order flow as a
+function of time since the trade, with its credible band. One more buy than
+sell trade moves the midquote by 0.0061 basis points in the same second; the
+response continues to build for about seven seconds, to 0.0093, and about 15
+per cent of it then decays away over the following minute, leaving a
+permanent impact of 0.0079 (0.0074 to 0.0084). This is the shape that
+microstructure models describe with a transient propagator
+\citep{hasbrouck1991, bouchaud2004}, estimated here without assuming its
+functional form. Panels (c) and (f) regress the imbalance on its own past
+over 300 seconds for SPY and BAC. The coefficient at one second is 0.16 for
+SPY and 0.11 for BAC, but the tails carry most of the memory: the
+coefficients over five minutes sum to 0.38 and 0.57 respectively, and the
+curve for BAC, a large-tick stock whose queue dynamics encourage order
+splitting, remains positive to about 100 seconds \citep{lillo2004}. Panels
+(d) and (e) show the two directions of the relation between volume and
+volatility: a thousand shares traded a second earlier raise the next second's
+absolute return by 0.001 basis points, with a decay over about a minute and a
+secondary bump at six to seven seconds that coincides with the time taken to
+absorb order flow in panel (b); and one basis point of absolute return attracts
+about 1,400 additional shares in the following second and some 22,000 over
+the following two minutes. The six curves use between 8 and 12 effective
+degrees of freedom for 120 to 300 lags.
+
+\begin{figure}[t]
+\centering
+\includegraphics[width=\textwidth]{figures/microstructure_lag_curves.pdf}
+\caption{Intraday lag curves at one-second resolution, 7 to 11 October
+2013. (a) SPY midquote return on order-flow imbalance; (b) the cumulative
+sum of (a), the price response to one unit of order flow; (c) SPY order-flow
+imbalance on its own past; (d) SPY absolute return on past volume; (e) SPY
+volume on past absolute returns; (f) BAC order-flow imbalance on its own
+past.}
+\label{fig:micro}
+\end{figure}
+
 \subsection{Air pollution and mortality in Chicago}
 
 The setting that motivated much of the distributed lag literature is the
@@ -587,9 +639,11 @@ that combines automatic adaptive smoothing with a pragmatically large choice
 of $p$ to ensure simple and flexible smoothing of the lag curve that avoids
 sensitivity to the choice of $p$. The real data illustrations in Section
 \ref{sec:real} show the adaptive curve reporting no structure where the data
-contain none, a sharp and short-lived response where there is one, and a
-slowly decaying response over a hundred lags, in each case with far fewer
-effective parameters than the number of lags. The new approach provides users
+contain none, a sharp and short-lived response where there is one, a slowly
+decaying response over a hundred lags, the build-up and partial decay of price
+impact over seconds, and the displacement of deaths by a few days after a
+polluted day, in each case with far fewer effective parameters than the number
+of lags. The new approach provides users
 of DLMs with a new way to explore their data with confidence that the
 estimates are not contaminated by artefacts that result from particular model
 choices.

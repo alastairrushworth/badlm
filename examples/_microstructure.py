@@ -3,7 +3,9 @@
 The sample data shipped with the QuantConnect Lean repository hold every trade
 and quote update for SPY, BAC, AIG and IBM on 7 to 11 October 2013. For each
 regular-session second this module computes the national best bid and offer
-(the best bid and ask over the latest quote of each exchange), the midquote
+(the best bid and ask over the latest quote of each exchange, ignoring quotes
+older than ``QUOTE_EXPIRY`` seconds, since a venue that stops updating would
+otherwise leave a stale price in the book all day), the midquote
 return in basis points, the number and volume of buyer- and seller-initiated
 trades (trades above the prevailing midquote are buys, below are sells, and
 trades at the midquote are signed by the tick rule), and the quoted spread.
@@ -21,6 +23,7 @@ DATA_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "data")
 DAYS = ("20131007", "20131008", "20131009", "20131010", "20131011")
 OPEN_MS, CLOSE_MS = 34_200_000, 57_600_000           # 09:30 to 16:00
 N_SEC = (CLOSE_MS - OPEN_MS) // 1000
+QUOTE_EXPIRY = 60                                     # seconds a venue's quote stays valid
 URL = "https://raw.githubusercontent.com/QuantConnect/Lean/master/Data/equity/usa/tick/{sym}/{day}_{kind}.zip"
 
 
@@ -50,8 +53,9 @@ def process_day(sym, day):
     # NBBO at the end of each second from the latest quote of every exchange
     def best(side, agg):
         q = quotes.loc[quotes[side] > 0, ["sec", "exch", side]]
-        last = q.groupby(["sec", "exch"])[side].last().unstack("exch")
-        last = last.reindex(range(N_SEC)).ffill()
+        last = q.groupby(["sec", "exch"])[side].last().unstack("exch").reindex(range(N_SEC))
+        updated = last.notna().mul(np.arange(N_SEC)[:, None]).where(last.notna()).ffill()
+        last = last.ffill().where(np.arange(N_SEC)[:, None] - updated <= QUOTE_EXPIRY)
         return getattr(last, agg)(axis=1).to_numpy()
 
     bid, ask = best("bid", "max"), best("ask", "min")

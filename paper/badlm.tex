@@ -55,6 +55,7 @@ that the estimates are robust to prior model choice.
 \doublespacing
 
 \section{Introduction}
+\label{sec:intro}
 
 Distributed lag models (DLMs) find application whenever the influence of a
 time-indexed independent variable is delayed and spread over time. Although
@@ -140,7 +141,9 @@ illustrates the DLM's desirable properties, especially in comparison to
 existing approaches. This study compares bias resulting from getting $p$
 wrong, which is itself a central contribution, as DLMs have not previously
 been compared in this manner. Section \ref{sec:real} applies the model
-to two real data sets, daily stock market returns and COVID-19 cases and deaths.
+to four real data sets: daily stock market returns, intraday order flow and
+prices at one-second resolution, air pollution and mortality in Chicago, and
+COVID-19 cases and deaths.
 Section \ref{sec:discussion} concludes the paper with an overview of the main
 findings and a discussion of the implications for users of distributed lag
 models.
@@ -447,12 +450,13 @@ models are preferable choices.
 \section{Illustrations with real data}
 \label{sec:real}
 
-Two applications illustrate how the adaptive lag curve behaves on noisy real
+Four applications illustrate how the adaptive lag curve behaves on noisy real
 data. Both use the accompanying software with its default settings: the random
 walk prior on the log precisions, an exact zero constraint at the maximum lag,
 $K = \lceil 2(p+1)/3 \rceil$ basis functions, and the collapsed NUTS sampler
-with two chains of 1000 retained draws. The scripts that reproduce them are in
-the software repository.
+with two chains of 1000 retained draws. Effective degrees of freedom are
+reported for the lag curve alone, excluding unpenalised terms. The scripts
+that reproduce them are in the software repository.
 
 \subsection{Daily stock market data}
 
@@ -464,8 +468,8 @@ for 2007 to 2016, 2,306 trading days spanning the 2008 crisis. Figure
 day's return on the preceding 20 days' returns, the linear information that a
 trading rule could exploit. For the index the curve is negative at lag one,
 $-0.10$ (95\% interval $-0.15$ to $-0.06$) per percentage point, and returns to zero within a week: a short-lived
-reversal with cumulative effect $-0.23$ ($-0.42$ to $-0.03$) and 5.7 effective degrees of freedom.
-For Apple the curve is indistinguishable from zero at every lag, with 2.7
+reversal with cumulative effect $-0.23$ ($-0.42$ to $-0.03$) and 4.7 effective degrees of freedom.
+For Apple the curve is indistinguishable from zero at every lag, with 1.7
 effective degrees of freedom; the adaptive smoother reports an absence of
 structure rather than inventing it. Panel (c) regresses the daily change in
 log VIX on the same day's and the preceding 60 days' index returns. The
@@ -477,7 +481,7 @@ absolute return, a measure of realised volatility, on its own past over 100
 days. The curve is strongest at lags two to three, decays over about a month
 and remains small but mostly positive thereafter, the long memory of
 volatility; the cumulative elasticity is 0.84 (0.75 to 0.94) and the smoother
-describes 100 lags with 8.9 effective degrees of freedom. In each panel the band widens where the data are least informative
+describes 100 lags with 7.9 effective degrees of freedom. In each panel the band widens where the data are least informative
 and the curve is pinned to zero at the maximum lag.
 
 \begin{figure}[t]
@@ -489,6 +493,45 @@ medians with 95\% credible bands. (a) Next-day S\&P 500 return on the previous
 contemporaneous and lagged S\&P 500 returns; (d) log absolute S\&P 500 return
 on its own past over 100 days.}
 \label{fig:stocks}
+\end{figure}
+
+\subsection{Air pollution and mortality in Chicago}
+
+The setting that motivated much of the distributed lag literature is the
+delayed effect of air pollution on daily mortality, and in particular the
+question of mortality displacement raised in Section \ref{sec:intro}. The
+\texttt{chicagoNMMAPS} data distributed with the R package \texttt{dlnm}
+\citep{gasparrini2011} contain daily counts of all-cause, cardiovascular and
+respiratory deaths in Chicago from 1987 to 2000, 5,114 days with means of 115,
+51 and 9 deaths per day, together with PM10 (mean 34 micrograms per cubic
+metre, 5 per cent of days interpolated), temperature and dew point. Log deaths
+were regressed on 40 lags of PM10 with the usual adjustments of this
+literature as unpenalised terms: a B-spline of time with seven degrees of
+freedom per year for trend and season, weekday indicators, and B-splines of
+temperature and dew point, with AR(1) errors. Coefficients are expressed as the
+percentage change in deaths per 10 micrograms per cubic metre.
+
+Figure \ref{fig:chicago} shows the three lag curves and their cumulative
+sums. For all-cause deaths the curve is positive on the day of exposure, 0.15
+per cent (95\% interval $-0.02$ to $0.36$), falls through zero within three
+days and is negative from about lag four to lag ten, where the band excludes
+zero, before returning to zero. The cumulative effect over 40 days is
+$-0.20$ per cent ($-1.30$ to $0.85$): deaths are brought forward by a few days
+rather than added, the displacement pattern of \citet{schwartz2000} and
+\citet{zanobetti2000}, and the lag curve exhibits it without any lag structure
+having been specified in advance. The curve uses about five effective degrees
+of freedom. Cardiovascular deaths show the same shape with smaller amplitude,
+and respiratory deaths, at nine per day, are too few to show anything beyond
+a wide band around zero.
+
+\begin{figure}[t]
+\centering
+\includegraphics[width=\textwidth]{figures/chicago_lag_curves.pdf}
+\caption{Chicago, 1987 to 2000: percentage change in daily deaths per 10
+micrograms per cubic metre of PM10 at lags 0 to 40 for (a) all-cause, (b)
+cardiovascular and (c) respiratory deaths, with 95\% bands, and (d) the
+cumulative effect up to each lag.}
+\label{fig:chicago}
 \end{figure}
 
 \subsection{COVID-19 cases and deaths}
@@ -507,8 +550,8 @@ shows the data and the fitted curve with $p = 35$. The cumulative elasticity
 is 0.74 (0.66 to 0.81): a 10 per cent rise in cases is followed by roughly a 7 per
 cent rise in deaths, the shortfall from one reflecting the fall in the case
 fatality ratio over the period. The curve rises to a peak at about three weeks
-and returns to zero by five, but the individual lag coefficients are poorly
-identified, because the smoothed case series is highly collinear across lags:
+and returns to zero by five, using under three effective degrees of freedom,
+but the individual lag coefficients are poorly identified, because the smoothed case series is highly collinear across lags:
 the data determine the total and the timing, and the adaptive prior supplies
 the smoothness. Deaths reported on Tuesday to Friday are about 2.5 times
 those reported on a Sunday. A negative binomial model for the raw counts,

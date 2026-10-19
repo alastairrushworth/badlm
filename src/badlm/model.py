@@ -268,11 +268,16 @@ class BADLM:
 
     def effective_df(self):
         """Posterior draws of the effective degrees of freedom of the lag curve
-        (Gaussian family; ``None`` otherwise)."""
+        (Gaussian family; ``None`` otherwise).
+
+        Unpenalised terms (intercept and covariates) each contribute exactly one
+        degree of freedom to the fit and are excluded, so the value describes
+        the lag curve alone.
+        """
         ed = self.draws_.get("ed")
         if ed is None:
             return None
-        ed = np.asarray(ed).ravel()
+        ed = np.asarray(ed).ravel() - self.data_.q
         return {"draws": ed, "mean": float(ed.mean()), "sd": float(ed.std())}
 
     def diagnostics(self):

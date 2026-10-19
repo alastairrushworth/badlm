@@ -39,11 +39,12 @@ These bring the paper into line with the `badlm` package.
 ## Additions
 
 - A new Section 4, "Illustrations with real data", applies the model to daily
-  stock market returns (S&P 500, Apple, VIX, 2007 to 2016) and to COVID-19
-  cases and deaths in the United States (June 2020 to March 2021), with two
-  figures produced by `examples/stocks.py` and `examples/covid.py`. The
-  Discussion is now Section 5 and refers to these illustrations; the
-  introduction mentions the section.
+  stock market returns (S&P 500, Apple, VIX, 2007 to 2016), to intraday order
+  flow and prices for SPY at one-second resolution, to air pollution and
+  mortality in Chicago (1987 to 2000), and to COVID-19 cases and deaths in the
+  United States (June 2020 to March 2021), with figures produced by the
+  scripts in `examples/`. The Discussion is now Section 5 and refers to these
+  illustrations; the introduction mentions the section.
 
 ## Corrections
 

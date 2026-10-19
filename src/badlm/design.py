@@ -234,7 +234,15 @@ class DesignData:
 
 
 def build_design(x, y, struct, covariates=None, intercept=True, offset=None,
-                 standardize=True, family="gaussian"):
+                 standardize=True, family="gaussian", groups=None):
+    """Assemble the design for one fit.
+
+    ``groups`` (same length as ``x``) marks separate series, for example
+    trading days or cities; lags are then formed within each group and the
+    first ``p`` observations of every group are dropped. ``y``, ``covariates``
+    and ``offset`` may be given either for all of ``x`` or only for the
+    retained rows.
+    """
     x = np.asarray(x, float).ravel()
     y = np.asarray(y, float).ravel()
     p = struct.p
@@ -242,11 +250,28 @@ def build_design(x, y, struct, covariates=None, intercept=True, offset=None,
         raise ValueError("x and y must be finite; missing values are not supported")
     if p < 1 or p >= x.size:
         raise ValueError("nlag must be between 1 and len(x) - 1")
-    if y.size == x.size:
-        y = y[p:]
-    elif y.size != x.size - p:
-        raise ValueError("y must have length len(x) or len(x) - nlag")
-    N = x.size - p
+    if groups is None:
+        segments = [np.arange(x.size)]
+    else:
+        groups = np.asarray(groups).ravel()
+        if groups.size != x.size:
+            raise ValueError("groups must have the same length as x")
+        _, first = np.unique(groups, return_index=True)
+        segments = [np.where(groups == groups[i])[0] for i in np.sort(first)]
+        if min(len(seg) for seg in segments) <= p:
+            raise ValueError("every group must have more than nlag observations")
+    keep = np.concatenate([seg[p:] for seg in segments])
+    N = keep.size
+
+    def rows(v, name):
+        v = np.asarray(v, float)
+        if v.shape[0] == x.size:
+            return v[keep]
+        if v.shape[0] == N:
+            return v
+        raise ValueError(f"{name} must have len(x) or len(x) - nlag * n_groups rows")
+
+    y = rows(y, "y")
     if family == "gaussian" and standardize:
         y_mean = float(y.mean()) if intercept else 0.0
         y_sd = float(y.std(ddof=1)) if y.std(ddof=1) > 0 else 1.0
@@ -256,26 +281,17 @@ def build_design(x, y, struct, covariates=None, intercept=True, offset=None,
     x_sd = float(x.std(ddof=1)) if (standardize and x.std(ddof=1) > 0) else 1.0
     std = Standardizer(x_mean=x_mean, x_sd=x_sd, y_mean=y_mean, y_sd=y_sd)
 
-    L = lag_matrix(std.x(x), p)
+    xs = std.x(x)
+    L = np.vstack([lag_matrix(xs[seg], p) for seg in segments])
     cols = []
     if intercept:
         cols.append(np.ones((N, 1)))
     if covariates is not None:
         Wc = np.asarray(covariates, float)
-        Wc = Wc.reshape(Wc.shape[0], -1)
-        if Wc.shape[0] == x.size:
-            Wc = Wc[p:]
-        if Wc.shape[0] != N:
-            raise ValueError("covariates must have len(x) or len(x) - nlag rows")
+        Wc = rows(Wc.reshape(Wc.shape[0], -1), "covariates")
         cols.append(Wc)
     W = np.hstack(cols) if cols else np.zeros((N, 0))
-    if offset is None:
-        off = np.zeros(N)
-    else:
-        off = np.asarray(offset, float).ravel()
-        off = off[p:] if off.size == x.size else off
-        if off.size != N:
-            raise ValueError("offset must have length len(x) or len(x) - nlag")
+    off = np.zeros(N) if offset is None else rows(np.asarray(offset, float).ravel(), "offset")
     X = np.hstack([L @ struct.B_r, W])
     y_model = std.y(y) if family == "gaussian" else y
     stats = SuffStats.from_data(X, y_model - off) if family == "gaussian" else None

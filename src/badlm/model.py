@@ -104,21 +104,23 @@ class BADLM:
         self.struct: Structure = build_structure(self.nlag, self.k, end_constraint=self.end_constraint)
 
     # ----------------------------------------------------------------- fitting
-    def fit(self, x, y, covariates=None, offset=None, *, samples=2000, warmup=1000, chains=4,
+    def fit(self, x, y, covariates=None, offset=None, groups=None, *, samples=2000, warmup=1000, chains=4,
             seed=0, thin=1, chain_method="vectorized", target_accept=0.9, progress=False,
             init="laplace", clear_jax_cache=True, dense_mass=True, max_tree_depth=10):
         """Fit the model.
 
         ``samples`` are retained per chain after ``warmup`` iterations. For
         ``sampler='nuts'`` the chain is initialised at the Laplace mode when
-        ``init='laplace'``. Each fit compiles its own JAX executables; with
+        ``init='laplace'``. ``groups`` marks separate series within ``x`` (for
+        example trading days), so that lags never cross a group boundary. Each fit compiles its own JAX executables; with
         ``clear_jax_cache=True`` they are released afterwards so that long
         simulation loops do not exhaust the compiler's memory.
         """
         from .numpyro_model import tau_basis_matrix
 
         data, std = build_design(x, y, self.struct, covariates=covariates, intercept=self.intercept,
-                                 offset=offset, standardize=self.standardize, family=self.family)
+                                 offset=offset, standardize=self.standardize, family=self.family,
+                                 groups=groups)
         self.data_: DesignData = data
         self.std_: Standardizer = std
         self.C_ = tau_basis_matrix(self.struct.K_tau, self.priors.tau_basis) if self.tau_model == "basis" else None

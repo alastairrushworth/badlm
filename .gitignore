@@ -12,4 +12,5 @@ dist/
 *.out
 *.synctex.gz
 
-examples/data/
+examples/data/*
+!examples/data/chicagoNMMAPS.csv.gz

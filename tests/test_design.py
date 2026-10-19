@@ -97,3 +97,17 @@ def test_build_design_response_handling(rng):
         build_design(x, y[:30], st)
     with pytest.raises(ValueError):
         build_design(np.r_[x, np.nan], np.r_[y, 1.0], st)
+
+
+def test_build_design_groups_keep_lags_within_group(rng):
+    st = build_structure(3, 5)
+    x = rng.normal(size=20)
+    y = rng.normal(size=20)
+    groups = np.repeat([0, 1], 10)
+    d, _ = build_design(x, y, st, groups=groups, standardize=False)
+    single = [build_design(x[g == groups], y[g == groups], st, standardize=False)[0] for g in (0, 1)]
+    assert d.N == 14
+    assert np.allclose(d.L, np.vstack([s.L for s in single]))
+    assert np.allclose(d.y, np.concatenate([s.y for s in single]))
+    with pytest.raises(ValueError):
+        build_design(x, y, st, groups=np.r_[np.zeros(17), 1, 1, 1])

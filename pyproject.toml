@@ -1,0 +1,44 @@
+[build-system]
+requires = ["setuptools>=64", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "badlm"
+version = "0.2.0"
+description = "Bayesian adaptive distributed lag models"
+readme = "README.md"
+requires-python = ">=3.10"
+license = { text = "GPL-2.0-only" }
+authors = [{ name = "Alastair Rushworth", email = "alastairmrushworth@gmail.com" }]
+keywords = ["distributed lag", "bayesian", "adaptive smoothing", "penalised splines", "time series"]
+classifiers = [
+    "Intended Audience :: Science/Research",
+    "License :: OSI Approved :: GNU General Public License v2 (GPLv2)",
+    "Programming Language :: Python :: 3",
+    "Topic :: Scientific/Engineering :: Mathematics",
+]
+dependencies = [
+    "numpy>=1.24",
+    "scipy>=1.10",
+    "jax>=0.4.20",
+    "jaxlib>=0.4.20",
+    "numpyro>=0.13",
+    "matplotlib>=3.6",
+]
+
+[project.optional-dependencies]
+arviz = ["arviz>=0.15"]
+pandas = ["pandas>=1.5"]
+test = ["pytest>=7", "arviz>=0.15", "pandas>=1.5"]
+
+[project.urls]
+Homepage = "https://github.com/alastairrushworth/badlm"
+Paper = "https://arxiv.org/abs/1801.06670"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+markers = ["slow: long-running validation tests (deselect with '-m \"not slow\"')"]
+addopts = "-m 'not slow'"

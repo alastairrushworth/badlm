@@ -14,3 +14,4 @@ dist/
 
 examples/data/*
 !examples/data/chicagoNMMAPS.csv.gz
+paper/results/study*.json

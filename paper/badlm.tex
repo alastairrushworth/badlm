@@ -17,6 +17,11 @@
 \newcommand{\bS}{\mathbf{S}}
 \newcommand{\bI}{\mathbf{I}}
 \newcommand{\bA}{\mathbf{A}}
+\newcommand{\bZ}{\mathbf{Z}}
+\newcommand{\bC}{\mathbf{C}}
+\newcommand{\bgamma}{\bm{\gamma}}
+\newcommand{\btheta}{\bm{\theta}}
+\newcommand{\bone}{\mathbf{1}}
 \newcommand{\blambda}{\bm{\lambda}}
 \newcommand{\btau}{\bm{\tau}}
 \newcommand{\bbeta}{\bm{\beta}}
@@ -28,7 +33,7 @@
 
 \title{Bayesian adaptive distributed lag models}
 \author{Alastair Rushworth}
-\date{First version: January 2018 (arXiv:1801.06670v1). This revision: \today}
+\date{First version: January 2018 (arXiv:1801.06670v1). Revised \today}
 
 \begin{document}
 \maketitle
@@ -46,7 +51,11 @@ fitting. Simulations show that bias and misspecification are dramatically
 reduced by generalising the smoothing model to allow varying penalisation of
 the lag influence estimates. The resulting model is shown to have substantially
 fewer effective parameters and lower bias, providing the user with confidence
-that the estimates are robust to prior model choice.
+that the estimates are robust to prior model choice. An efficient inference
+scheme is described in which the lag coefficients are integrated out
+analytically and the remaining low-dimensional posterior is sampled with the
+No-U-Turn Sampler, with a cost per likelihood evaluation that does not grow
+with the length of the series.
 
 \medskip\noindent
 \textit{Keywords:} Distributed lag model; penalized spline; adaptive smoothing
@@ -136,7 +145,8 @@ ensures strong penalisation at high lags so that $p$ can be made arbitrarily
 large without the risk of overfitting. This follows the tradition of richly
 specifying a hierarchical model and ensuring parsimony by liberal use of
 regularisation and smoothing. A new DLM is described in Section
-\ref{sec:model} and in Section \ref{sec:sim} a comprehensive simulation study
+\ref{sec:model}, its computation in Section \ref{sec:comp}, and in Section
+\ref{sec:sim} a simulation study
 illustrates the DLM's desirable properties, especially in comparison to
 existing approaches. This study compares bias resulting from getting $p$
 wrong, which is itself a central contribution, as DLMs have not previously
@@ -218,16 +228,19 @@ When $\lambda_1 = \lambda_2 = \ldots = \lambda_{K-1} = \lambda$, then $\bQ =
 
 The influence of very large lags is expected to be negligible, and a lag
 curve that terminates away from zero at lag $p$ would imply an artificial
-discontinuity with the implicitly assumed $\beta_{p+j} = 0$. Rather than
-modifying $\bQ$, this is discouraged by a single pseudo-observation: the row
-$(B_1(p), \ldots, B_K(p))$ is appended to $\bX$ together with a zero response,
-which contributes the factor $\exp\{-\beta_p^2 / (2\sigma^2)\}$ to the
-posterior and so shrinks the final value of the lag curve towards zero at the
-scale of the error variance, without introducing an additional tuning
-parameter. Alternatively the constraint $\beta_p = 0$, optionally together with
-$\beta'_p = 0$, can be imposed exactly by restricting $\bb$ to the null space
-of the constraint rows, which leaves the generalised determinant above
-unchanged up to a constant; this is the default in the accompanying software.
+discontinuity with the implicitly assumed $\beta_{p+j} = 0$. The constraint
+$\beta_p = 0$, optionally together with $\beta'_p = 0$, is therefore imposed
+exactly. Writing the constraints as $\bC \bb = \bzero$, where the $m \times
+K$ matrix $\bC$ holds the basis values and derivatives at lag $p$, and
+letting the orthonormal columns of the $K \times (K - m)$ matrix $\bZ$ span
+the null space of $\bC$, the coefficients are parameterised as $\bb = \bZ
+\tilde{\bb}$, so that the basis becomes $\bX \bZ$ and the prior precision of
+$\tilde{\bb}$ becomes $\tilde{\bQ} = \bZ^\top \bQ \bZ$. The null space of
+$\bQ$ is spanned by the constant vector, which does not satisfy the value
+constraint, so $\tilde{\bQ}$ is positive definite and the prior on
+$\tilde{\bb}$ is proper. The constraint adds no tuning parameter and, as
+shown in Section \ref{sec:comp}, leaves the normalising constant of the prior
+in closed form.
 
 A further smoothing prior distribution is placed over $\blambda$ to restrict
 their flexibility. This is particularly attractive as it also reflects our
@@ -247,214 +260,313 @@ where $\bK$ is the $(K-1) \times (K-1)$ precision matrix
 \end{pmatrix}.
 \end{equation*}
 Therefore, for small values of the variance $\zeta^2$, pairs of consecutive
-elements of $\btau$ are more strongly smoothed towards each other. Finally,
-the variance parameters were assigned weakly informative inverse-gamma priors,
-$\sigma^2 \sim \mathrm{IG}(0.001, 0.001)$ and $\zeta^2 \sim \mathrm{IG}(1,
-1/2)$, the values used in the accompanying R package. The combination of
-adaptive smoothing with smoothed variances as described results in a very
-flexible model that can accommodate complex shapes using a relatively simple
-specification. The model described above assumes Gaussian errors for
-simplicity, but the ideas easily generalise to accommodate other response
+elements of $\btau$ are more strongly smoothed towards each other. This random
+walk is itself intrinsic, with rank $K - 2$, and is anchored by a prior on the
+level $\bar{\tau}$ of the log precisions. Both this and the prior on $\zeta$
+are penalised complexity priors \citep{simpson2017}. The scale $\zeta$ has an
+exponential prior with rate chosen so that $\Pr(\zeta > 2) = 0.1$, which
+shrinks the model towards its non-adaptive special case unless the data ask
+for adaptivity. The standard deviation $\exp(-\bar{\tau}/2)$ of coefficient
+differences implied by the level has an exponential prior with
+$\Pr\{\exp(-\bar{\tau}/2) > 1\} = 0.05$ on standardised data; its density
+decays like $\exp(-\bar{\tau}/2)$ for large precisions, which prevents the
+precision from drifting without bound once the data no longer inform it, as
+happens wherever the true curve is exactly flat. The error variance has
+$\sigma^2 \sim \mbox{Inverse-Gamma}(0.001, 0.001)$, and unpenalised terms,
+an intercept and any covariates, have flat priors. Both $\bx$ and $\by$ are
+standardised before fitting and every reported quantity is transformed back
+to the original scale. The combination of adaptive smoothing with smoothed
+precisions results in a very flexible model that can accommodate complex
+shapes using a relatively simple specification. The model described above
+assumes Gaussian errors for simplicity; autocorrelated errors are treated in
+Section \ref{sec:comp}, and the ideas generalise to other response
 distributions.
 
-Inference for the models fitted in the simulation study in Section
-\ref{sec:sim} was achieved using Markov chain Monte Carlo (MCMC) simulation
-using a mixture of Gibbs sampling and Metropolis--Hastings steps, implemented
-in R \citep{rcore2016}. The accompanying software, the Python package
-\texttt{badlm} (\url{https://github.com/alastairrushworth/badlm}), uses a
-different scheme that is considerably more efficient. Given $\btau$ and
-$\sigma^2$ the model is linear and Gaussian, so $\bb$ can be integrated out
-analytically: with $\bA = \bQ + \bX^\top \bX / \sigma^2$ and $\mathbf{m} =
-\bX^\top \by / \sigma^2$,
-\begin{equation*}
-\log p(\by \mid \btau, \sigma^2) = -\frac{n}{2} \log (2\pi\sigma^2)
-+ \frac{1}{2} \log |\bQ|_{+} - \frac{1}{2} \log |\bA|
-+ \frac{1}{2} \mathbf{m}^\top \bA^{-1} \mathbf{m}
-- \frac{\by^\top \by}{2\sigma^2},
-\end{equation*}
-where $|\bQ|_{+}$ is the generalised determinant of the intrinsic prior
-precision, the product of its non-zero eigenvalues. Since the pairs $(b_k,
-b_{k+1})$ penalised by $\bQ$ form a chain, the matrix-tree theorem gives
-$|\bQ|_{+} = K \prod_{k=1}^{K-1} \lambda_k$, so this term is simply $\log K +
-\sum_k \tau_k$. The resulting marginal posterior of $(\btau, \sigma^2)$ is
-smooth and low dimensional, and is sampled with the No-U-Turn Sampler
-\citep{hoffman2014} using automatic differentiation; $\bb$ is then drawn from
-its Gaussian conditional distribution for each retained draw. Collapsing
-removes the strong dependence between $\bb$ and $\btau$ that slows a Gibbs
-sampler, and each likelihood evaluation costs $O(K^3)$ regardless of $n$
-because only the sufficient statistics $\bX^\top \bX$ and $\bX^\top \by$ are
-needed. The software also provides a Gibbs sampler with slice updates of
-$\btau$ as an independent check, a Laplace approximation to the collapsed
-posterior that serves as a fast approximate fit and as the starting point of
-the chains, an exact version of the end constraint, AR(1) errors and
-Poisson and negative binomial responses.
+\section{Computation}
+\label{sec:comp}
+
+\subsection{Integrating out the lag coefficients}
+\label{sec:collapse}
+
+A Gibbs sampler that alternates between the coefficients $\bb$ and the log
+precisions $\btau$, with Metropolis steps for the latter, is the obvious
+scheme for this model and was used in the first version of this paper. It
+mixes poorly. Conditional on $\bb$, a large $\lambda_k$ forces the difference
+$b_{k+1} - b_k$ to be small, and conditional on a small difference the
+posterior of $\tau_k$ favours an even larger precision, so the chain creeps
+along a funnel. The remedy is to integrate the coefficients out: given
+$\btau$ and $\sigma^2$ the model is linear and Gaussian, and the integral is
+available in closed form.
+
+Let $\btheta = (\tilde{\bb}, \bgamma)$ collect the $K - m$ penalised and $q$
+unpenalised coefficients, let $\bX$ be the corresponding $n \times (K - m +
+q)$ design, and define the sufficient statistics $\bS = \bX^\top \bX$,
+$\mathbf{s} = \bX^\top \by$ and $\by^\top \by$, the block-diagonal prior
+precision $\bQ_\theta = \mbox{blockdiag}(\tilde{\bQ}, \bzero)$, $\bA =
+\bQ_\theta + \bS / \sigma^2$ and $\mathbf{m} = \mathbf{s} / \sigma^2$. Then
+\begin{equation}
+\log p(\by \mid \btau, \sigma^2) = -\frac{n}{2} \log(2\pi\sigma^2)
++ \frac{q}{2} \log 2\pi + \frac{1}{2} \log |\tilde{\bQ}|_{+}
+- \frac{1}{2} \log |\bA| + \frac{1}{2} \mathbf{m}^\top \bA^{-1} \mathbf{m}
+- \frac{\by^\top \by}{2 \sigma^2},
+\label{eq:collapsed}
+\end{equation}
+where $|\cdot|_{+}$ denotes the generalised determinant, the product of the
+non-zero eigenvalues, which is needed when $\tilde{\bQ}$ is singular. The
+prior normalising constant is the only awkward term, and it has a simple
+form. Without end constraints $\bQ = \bD^\top \mbox{diag}(\blambda) \bD$ is
+the weighted Laplacian of the chain graph on $K$ nodes, and the matrix-tree
+theorem \citep{kirchhoff1847, rue2005} gives $|\bQ|_{+} = K \prod_{k=1}^{K-1}
+\lambda_k$, so that $\log |\bQ|_{+} = \log K + \sum_k \tau_k$. With a single
+constraint of unit normal $\mathbf{v}$, $|\tilde{\bQ}| = |\bQ|_{+}
+(\mathbf{v}^\top \bone / \sqrt{K})^2$, because $\bZ^\top \bQ \bZ$ is a
+congruence of $\bQ$ restricted to a hyperplane whose determinant differs
+from $|\bQ|_{+}$ only by the squared cosine of the angle between the two
+hyperplane normals. In both cases $\log |\tilde{\bQ}|$ equals $\sum_k
+\tau_k$ plus a constant, so every $\tau_k$ enters the normalising constant
+linearly; with two constraints the determinant is evaluated numerically by a
+Cholesky factorisation.
+
+Evaluating Equation \eqref{eq:collapsed} therefore costs a single Cholesky
+factorisation of the $(K - m + q)$-dimensional matrix $\bA$, of order $K^3$,
+and does not depend on $n$ at all, since the sufficient statistics are
+computed once. The unpenalised coefficients are integrated out together with
+$\tilde{\bb}$, which is why $\bQ_\theta$ carries a zero block and
+Equation \eqref{eq:collapsed} carries the term $(q/2) \log 2\pi$. The
+derivative of Equation \eqref{eq:collapsed} with respect to $\tau_k$ is
+$\frac{1}{2}\{1 - \lambda_k\, \mathrm{E}[(b_{k+1} - b_k)^2 \mid \by, \btau,
+\sigma^2]\}$, the expected version of the quantity that drives the
+conditional update, which makes clear what collapsing achieves: the
+expectation is taken over the coefficients instead of fixing them.
+
+Serially correlated errors are accommodated at the same cost. If the errors
+follow a stationary AR(1) process with coefficient $\phi$, prewhitening
+replaces $\by$ and $\bX$ by $\mathbf{L}_\phi \by$ and $\mathbf{L}_\phi \bX$,
+where $\mathbf{L}_\phi$ scales the first row by $\sqrt{1 - \phi^2}$ and
+subtracts $\phi$ times the previous row from every other row. The whitened
+sufficient statistics are quadratic in $\phi$: $\bS(\phi) = \bS_a + \phi
+\bS_b + \phi^2 \bS_c$, with $\bS_a = \bX^\top \bX$, $\bS_b = -(\bX_{1:}^\top
+\bX_{:-1} + \bX_{:-1}^\top \bX_{1:})$ and $\bS_c = \bX_{1:-1}^\top
+\bX_{1:-1}$ in terms of the design with its first or last row removed, and
+likewise for $\mathbf{s}(\phi)$ and $\by^\top \by$, so three sets of
+statistics computed once serve every value of $\phi$, and Equation
+\eqref{eq:collapsed} gains the term $\frac{1}{2} \log (1 - \phi^2)$.
+
+Finally, when the true curve is exactly flat over a range of lags, Equation
+\eqref{eq:collapsed} is flat in the corresponding log precisions beyond the
+point where the penalty dominates the data, and only the prior holds them
+down. Log precisions above 30 are treated as infinite smoothing in every term
+of the likelihood, which keeps $\bA$ well conditioned without changing the
+posterior appreciably.
+
+\subsection{Sampling the hyperparameters}
+\label{sec:nuts}
+
+What remains is the marginal posterior of $\btau$, $\sigma^2$, $\zeta$ and,
+with AR(1) errors, $\phi$: a smooth density in $K + 1$ or $K + 2$ dimensions.
+It is sampled with the No-U-Turn Sampler \citep{hoffman2014}, with gradients
+obtained by automatic differentiation. Three details matter in practice.
+First, the random walk prior is parameterised non-centrally: with $w_1 = 0$,
+$w_{k+1} = w_k + \epsilon_k$ and $\epsilon_k \sim \N(0, 1)$, the log
+precisions are $\btau = \bar{\tau} \bone + \zeta (\mathbf{w} - \bar{w}
+\bone)$, so that $\zeta$ and the increments are a priori independent and the
+posterior has no funnel in $\zeta$. The scale and the level are sampled on
+the log scale and $\phi$ through its inverse hyperbolic tangent. Second, the
+posterior of $\btau$ is a long ridge, since neighbouring log precisions are
+tied together by the random walk, and a dense mass matrix adapted during
+warm-up reduces the length of the trajectories several-fold. Third, the
+chains start at the posterior mode, found by quasi-Newton optimisation in the
+same parameterisation; a Gaussian approximation about that mode, with
+covariance from the Hessian, also serves as a fast approximate fit.
+
+The coefficients are recovered after sampling. For each retained draw of
+$(\btau, \sigma^2, \phi)$ the coefficients are drawn from their conditional
+distribution $\N(\bA^{-1} \mathbf{m}, \bA^{-1})$ using the Cholesky factor
+of $\bA$, and the same factor gives the effective degrees of freedom of the
+lag curve, $\mbox{ED} = \tr[(\bS + \sigma^2 \bQ_\theta)^{-1} \bS] - q$, the
+trace of the hat matrix with the unpenalised terms, which contribute exactly
+one degree of freedom each, removed. Draws of the lag curve $\bbeta =
+\mathbf{B} \bZ \tilde{\bb}$ then yield pointwise credible bands, the
+cumulative effect $\sum_j \beta_j$, the lag of the largest effect and the
+lag beyond which the curve is negligible, all with their posterior
+uncertainty.
+
+The implementation was checked in three ways. Equation \eqref{eq:collapsed}
+agrees to numerical precision with the density of $\by$ under its implied
+marginal Gaussian distribution, with and without AR(1) errors. Simulation-based
+calibration \citep{talts2018} over data sets simulated from the prior gives
+uniform ranks for the error variance, the mean log precision and the lag
+coefficients. And a Gibbs sampler with slice updates of the log precisions,
+validated by the joint-distribution test of \citet{geweke2004}, yields the
+same posterior as the collapsed sampler on common data.
+
+\subsection{Software}
+\label{sec:software}
+
+The method is implemented in the Python package \texttt{badlm}
+(\url{https://github.com/alastairrushworth/badlm}), built on JAX
+\citep{jax2018} and NumPyro \citep{phan2019}. A fit with $n = 450$, $p = 50$
+and $K = 34$ takes about 20 seconds for one chain of 300 warm-up and 300
+retained draws on four processor cores, and about 30 seconds for four chains
+of 2000 iterations; the cost grows with $K$ rather than $n$. The package also
+provides Poisson and negative binomial responses, for which the coefficients
+cannot be integrated out and are sampled jointly with the log precisions;
+these count models sample markedly less efficiently, for the reason given at
+the start of Section \ref{sec:collapse}, and a collapsed scheme for them is
+the subject of further work.
 
 \section{Simulation study}
 \label{sec:sim}
 
-The adaptive model detailed in Section \ref{sec:model} was compared with
-several currently available distributed lag models, labelled $\M{1}$, $\M{2}$,
-$\M{3}$, $\M{4}$ and $\M{5}$. $\M{1}$ is a non-adaptive version of the DLM
-described in Section \ref{sec:model} (achieved by fixing $\lambda_1 = \lambda_2
-= \ldots = \lambda_{K-1} = \lambda$), $\M{2}$ is a Bayesian implementation of
-the DLM with linearly increasing ridge penalty proposed by \citet{muggeo2008},
-$\M{3}$ is the new adaptive model described in Section \ref{sec:model},
-$\M{4}$ is the P-spline model of \citet{obermeier2015} and $\M{5}$ is the DLM
-with logarithmically spaced knots of \citet{gasparrini2010}.
+The adaptive model detailed in Section \ref{sec:model} was compared with four
+currently available distributed lag models, labelled $\M{1}$, $\M{2}$,
+$\M{4}$ and $\M{5}$, with the adaptive model as $\M{3}$. $\M{1}$ is the
+non-adaptive version of the model of Section \ref{sec:model}, achieved by
+fixing $\lambda_1 = \lambda_2 = \ldots = \lambda_{K-1} = \lambda$. $\M{2}$ is
+a Bayesian implementation of the DLM of \citet{muggeo2008}, in which the
+basis coefficients are shrunk by a ridge penalty that increases linearly with
+lag, $\bQ = \lambda\, \mbox{diag}(1, 2, \ldots, K)$. $\M{4}$ is the P-spline
+model of \citet{obermeier2015}, with the first-difference penalty of $\M{1}$
+plus a ridge penalty, $\bQ = \lambda \bP + \rho \mathbf{I}$. $\M{5}$ is the
+DLM with logarithmically spaced knots of \citet{gasparrini2010}, fitted by
+least squares with the number of interior knots, between zero and twelve,
+chosen by AIC. Models $\M{1}$ to $\M{4}$ share the same basis of $K =
+\lceil 2(p + 1)/3 \rceil$ uniformly spaced cubic B-splines with the curve
+constrained to zero at the maximum lag, so that they differ only in the
+penalty; their scale parameters $\lambda$ and $\rho$ carry the penalised
+complexity prior of Section \ref{sec:model} that the adaptive model places on
+the level of its log precisions. Every Bayesian model was fitted with the
+collapsed sampler of Section \ref{sec:comp}, with one chain of 300 retained
+draws after 300 warm-up iterations started at the posterior mode, and the
+posterior mean of the lag curve was taken as the estimate. Effective degrees
+of freedom are those of the lag curve, and for $\M{5}$ the number of basis
+functions selected. The study is reproduced by a script in the software
+repository.
 
 \subsection{Comparison under different lag structures}
 \label{sec:sim1}
 
-To compare estimation performance of models $\M{1}$--$\M{5}$, time series
-response and covariate data were simulated assuming each of five
-different-shaped lag relationships, each with maximum lag $p = 50$. The curves
-are shown in Figure \ref{fig:curves} and included a delayed peak scenario
-(\scen{Delayed peak}), an exponential decay curve (\scen{Decay curve}), a
-horizontal line at 0 equivalent to a null effect (\scen{Flat response}), a
-curve exhibiting a shape similar to a mortality displacement effect
-(\scen{Displacement}) and a sharply peaked function that declines rapidly to
-0 (\scen{Sharp peak}).
-
-A covariate time series, $x_t$, was generated by assuming $x_t \sim \N(0.5
-x_{t-1}, 0.1^2)$, and conditional on each lag function, a response series
-$y_t$ was generated using $y_t = \sum_{j=0}^{50} \beta_j x_{t-j} +
-\epsilon_t$ for $t = 51, \ldots, 500$. The error term $\epsilon_t$ assumed
-autocorrelation such that $\epsilon_t \sim \N(0.2 \epsilon_{t-1}, 0.1^2)$,
-whose parameters were selected for an acceptable signal-to-noise ratio. The
-autocorrelation in both $x_t$ and $\epsilon_t$ reflects the temporal
-dependence in covariates and errors typically observed in real data.
+Time series response and covariate data were simulated under each of five
+lag relationships with maximum lag $p = 50$, shown in Figure
+\ref{fig:curves}: a delayed peak scenario (\scen{Delayed peak}), an
+exponential decay curve (\scen{Decay curve}), a horizontal line at zero
+equivalent to a null effect (\scen{Flat response}), a curve exhibiting a shape
+similar to a mortality displacement effect (\scen{Displacement}) and a
+sharply peaked function that declines rapidly to zero (\scen{Sharp peak}).
+A covariate series was generated as $x_t \sim \N(0.5 x_{t-1}, 0.1^2)$ and
+standardised, and conditional on each lag function a response series was
+generated as $y_t = \sum_{j=0}^{50} \beta_j x_{t-j} + \epsilon_t$ for $t =
+51, \ldots, 500$, with autocorrelated errors $\epsilon_t \sim \N(0.2
+\epsilon_{t-1}, 0.1^2)$. The lag function explains about 30 per cent of the
+variance of $y_t$ under the \scen{Delayed peak} curve. The autocorrelation
+in both $x_t$ and $\epsilon_t$ reflects the temporal dependence in covariates
+and errors typically observed in real data.
 
 \begin{figure}[t]
 \centering
-\includegraphics[width=0.85\textwidth]{figures/fig1_lag_curves.png}
+\includegraphics[width=0.8\textwidth]{figures/fig1_lag_curves.pdf}
 \caption{The five lag curves used to simulate response and covariate data
 with different lag response.}
 \label{fig:curves}
 \end{figure}
 
-Models $\M{1}$--$\M{5}$ were fitted to each of 200 realisations of the
-processes $\{x_t, y_t\}$ described above. The models were assessed in terms of
-their ability to recover the true lag curve, as measured by root-mean squared
-error (RMSE) and squared bias (Bias$^2$) of the estimates, defined for the
-$j$th simulation as $\left(\frac{1}{51} \sum_{i=0}^{50} (\hat{\beta}_i^{(j)}
-- \beta_i^{(j)})^2\right)^{1/2}$ and $\left(\frac{1}{51} \sum_{i=0}^{50}
-\hat{\beta}_i^{(j)} - \beta_i^{(j)}\right)^2$, respectively. Following
-\citet{hodges2001}, model complexity was recorded for fitted model
-$\M{i}^{(j)}$ using the effective degrees of freedom $\mathrm{ED} =
-\tr[\bX(\bX^\top \bX + \hat{\bS}_{\M{i}^{(j)}})^{-1} \bX^\top]$ where
-$\hat{\bS}_{\M{i}^{(j)}}$ is the estimated penalty component for the $i$th
-model fitted to the $j$th simulation. In particular, $\hat{\bS}_{\M{1}^{(j)}}
-= \hat{\lambda}^{(j)} \mathrm{diag}(1, 2, \ldots, p+1)$;
-$\hat{\bS}_{\M{2}^{(j)}} = \hat{\lambda}^{(j)} \bP$; $\hat{\bS}_{\M{3}^{(j)}}
-= \hat{\bQ}^{(j)}$ and $\hat{\bS}_{\M{4}^{(j)}} = \hat{\lambda}^{(j)} \bP +
-\hat{\rho}^{(j)} \bI$. For models $\M{1}$--$\M{4}$ the model matrix $\bX$ was
-identical, resulting from assuming $(2/3) \times (p + 1) = 34$ uniformly
-spaced B-spline basis functions to represent the lag curve, such that the
-$(i,k)$th element, $\bX_{i,k} = \sum_{j=0}^{p} x_{i-j} B_k(j)$. Since lag curve
-smoothness for $\M{5}$ is decided by finding the number of logarithmically
-spaced knots that minimises AIC, the effective dimension in this case is the
-number of knots, $\mathrm{ED} = n_z^{(j)}$ for the $j$th simulation.
+Models $\M{1}$ to $\M{5}$ were fitted to each of 50 realisations of the
+processes $\{x_t, y_t\}$ described above. The models were assessed in terms
+of their ability to recover the true lag curve, as measured by root mean
+squared error (RMSE) and squared bias (Bias$^2$) of the estimates, defined
+for the $j$th simulation as $\left(\frac{1}{51} \sum_{i=0}^{50}
+(\hat{\beta}_i^{(j)} - \beta_i)^2\right)^{1/2}$ and $\left(\frac{1}{51}
+\sum_{i=0}^{50} (\hat{\beta}_i^{(j)} - \beta_i)\right)^2$, and, following
+\citet{hodges2001}, by the effective degrees of freedom of the fitted curve.
 
 \begin{table}[t]
 \centering
-\begin{tabular}{llrrrrr}
-\hline
-Lag curve shape & Summary & $\M{1}$ & $\M{2}$ & $\M{3}$ & $\M{4}$ & $\M{5}$ \\
-\hline
- & RMSE & 17.31 & 14.53 & 10.32 & 15.51 & 22.68 \\
-\scen{Delayed peak} & Bias$^2$ & 3.31 & 3.24 & 3.32 & 9.59 & 3.83 \\
- & ED & 18.53 & 14.99 & 7.12 & 12.14 & 15.81 \\
-\hline
- & RMSE & 16.57 & 11.59 & 8.45 & 9.46 & 14.15 \\
-\scen{Decay curve} & Bias$^2$ & 1.45 & 1.65 & 2.32 & 4.30 & 0.79 \\
- & ED & 18.15 & 11.54 & 5.42 & 6.40 & 7.88 \\
-\hline
- & RMSE & 16.60 & 8.80 & 1.59 & 2.00 & 13.68 \\
-\scen{Flat response} & Bias$^2$ & 1.14 & 0.82 & 0.28 & 0.22 & 1.51 \\
- & ED & 18.07 & 8.08 & 0.77 & 0.68 & 7.74 \\
-\hline
- & RMSE & 17.32 & 14.13 & 11.24 & 15.29 & 20.34 \\
-\scen{Displacement} & Bias$^2$ & 2.79 & 3.30 & 3.36 & 8.79 & 2.51 \\
- & ED & 18.55 & 13.97 & 7.97 & 12.78 & 13.37 \\
-\hline
- & RMSE & 23.98 & 16.65 & 10.97 & 27.72 & 14.07 \\
-\scen{Sharp peak} & Bias$^2$ & 16.01 & 11.63 & 6.81 & 24.45 & 0.86 \\
- & ED & 19.09 & 11.05 & 3.86 & 10.85 & 7.94 \\
-\hline
-\end{tabular}
+\input{tables/simulation.tex}
 \caption{Estimated lag function RMSE, squared bias and effective degrees of
-freedom for five different types of lag curve shape, averaged across 200
-simulated data sets. RMSE and Bias$^2$ have each been scaled by $10^3$.}
+freedom for five types of lag curve shape, averaged across 50 simulated data
+sets. RMSE has been scaled by $10^3$ and Bias$^2$ by $10^6$.}
 \label{tab:sim}
 \end{table}
 
-Table \ref{tab:sim} shows the average RMSE, Bias$^2$ and ED for each model
-and lag curve scenario combination. The adaptive model, $\M{3}$, outperformed
-all of the models in terms of RMSE across all lag curve scenarios. Large
-separations were observed in model complexity across each scenario, with the
-adaptive smoothing $\M{3}$ resulting in the lowest ED across all non-null
-scenarios, ranging between 3.86 to 7.97 compared to 6.4 and 19.09 for the
-other models. A particularly concerning result is that only $\M{3}$ and
-$\M{4}$ correctly result in degrees of freedom $\approx 1$ under the
-\scen{Flat response} scenario, compared to a range of 7.7 and 18 for the
-others, which suggests that other approaches may falsely identify structure
-when none exists at all. Bias was generally low across all models and
-scenarios, although higher values were noted across $\M{1}$--$\M{4}$ under the
-\scen{Sharp peak} scenario. As might be expected, the log-spaced knots of
-$\M{5}$ performed favourably when lag influence declined rapidly from 0
-(\scen{Sharp peak}), and much less so when the strongest lag effect was larger
-than 0 (\scen{Delayed peak}, \scen{Displacement}). The comparison clearly
-highlighted the need for care in choosing a lag smoother in practical
-application, and that the quality of fit strongly depends on the underlying
-lag function. Furthermore, the simulations provide encouraging evidence that
-the newly proposed adaptive model is far more robust to these underlying
-differences, and might be a suitable choice when little is known about the
-structure being estimated.
+Table \ref{tab:sim} summarises the results. The adaptive model $\M{3}$ has
+the lowest RMSE under each of the four lag curves with a non-null effect,
+and the margin is widest where the curve changes character along the lag
+axis. Relative to the best of the other four models its RMSE is 23 per cent
+lower under the \scen{Delayed peak} curve, 24 per cent lower under
+\scen{Sharp peak}, 17 per cent lower under \scen{Displacement} and 11 per
+cent lower under \scen{Decay curve}, and in each of these scenarios it
+attains the lower error in at least 96 per cent of the 50 replicates when
+compared replicate by replicate with $\M{1}$, $\M{2}$ or $\M{4}$. The
+single-penalty P-spline $\M{1}$ is the strongest of the other Bayesian
+models under the three smooth curves, but under \scen{Sharp peak}, where one
+smoothing parameter must compromise between the steep rise at short lags
+and the long flat tail, it and $\M{4}$ are the worst models of all, with
+RMSE more than double that of $\M{3}$. The ridge component of $\M{4}$ adds a little error to $\M{1}$ in
+every scenario, and the lag-increasing ridge of $\M{2}$ does so under the
+three smooth curves, although it helps under \scen{Sharp peak}, whose effect
+is confined to the short lags that its penalty leaves relatively free. The
+log-knot model $\M{5}$ is competitive under \scen{Decay curve} and
+\scen{Sharp peak}, whose features lie at the short lags where its knots are
+dense, but it has the largest error of all under \scen{Delayed peak}, whose
+feature lies at intermediate lags, and under \scen{Flat response}, where AIC
+selects spurious structure. Under that null curve the four Bayesian models
+are close, and $\M{1}$ and $\M{3}$ are indistinguishable, each using about
+2.5 effective degrees of freedom: the adaptive prior does not invent
+structure when there is none to find. Under the four non-null curves the
+squared bias is a small part of the mean squared error for every model, so
+the differences in RMSE reflect the variance of the estimates rather than
+systematic error in their level; under \scen{Flat response}, where the
+fitted curves are almost straight lines, the error of a Bayesian model is
+mostly a small shift in the level of the curve, which the ridge penalties of
+$\M{2}$ and $\M{4}$ shrink towards zero.
+
+The effective degrees of freedom show the mechanism. $\M{3}$ uses fewer
+effective parameters than $\M{1}$, $\M{2}$ and $\M{4}$ under every curve,
+and under the four non-null curves it uses between a fifth and three fifths
+fewer than $\M{1}$ (for example 5.7 against 14.0 under \scen{Sharp peak} and
+8.8 against 13.3 under \scen{Delayed peak}). Lower error with fewer
+effective parameters is the signature of adaptive smoothing: the lag-varying
+precision is high, and the fitted curve close to linear, over the flat part
+of each curve, and is relaxed only where the curve actually moves. The
+price is computational. With the collapsed sampler of Section
+\ref{sec:comp} a fit of $\M{3}$ took about 25 seconds on a single CPU core
+against 10 to 13 seconds for $\M{1}$, $\M{2}$ and $\M{4}$, whose
+hyperparameter spaces have one or two dimensions rather than $K - 1$, and
+well under a second for the least squares fit of $\M{5}$.
 
 \subsection{DLM misspecification with maximum lag $p$}
 \label{sec:sim2}
 
-Next, simulation was used to explore robustness of $\M{1}$--$\M{5}$ to
+Next, simulation was used to explore the robustness of $\M{1}$ to $\M{5}$ to
 different choices of maximum lag $p$. The series $x_t$ and $y_t$ were
 generated exactly as in Section \ref{sec:sim1}, using only the
-\scen{Displacement} lag function with 50 lags. The models $\M{1}$--$\M{5}$
-were fitted to the simulated $x_t$ and $y_t$, assuming maximum lags of $p =
-50, 75, 100, 125$. To ensure the fairest comparison, the range of flexibility
-for each model was restricted so that $0 < \mathrm{ED} < 2p/3$, and also
-ensured that lag curve flexibility could grow proportionally with $p$. For
-each of 200 fits, the RMSE of the lag curve estimate, ED and squared bias were
-recorded and the results are summarised in Figure \ref{fig:ed}.
+\scen{Displacement} lag function with 50 lags, and the models were fitted
+assuming maximum lags of $p = 50, 75, 100$ and $125$, with $K = \lceil 2(p +
+1)/3 \rceil$ basis functions so that the flexibility available to each model
+grows in proportion to $p$. For each of 20 realisations the RMSE of the lag
+curve estimate over all $p + 1$ lags, its squared bias and the effective
+degrees of freedom were recorded; Figure \ref{fig:ed} summarises the
+results.
 
 \begin{figure}[t]
 \centering
 \includegraphics[width=0.7\textwidth]{figures/fig2_ed_rmse.pdf}
-\caption{Effective number of parameters and RMSE for each of
-$\M{1}$--$\M{5}$. Increasing diameter of the plotting symbols indicates larger
+\caption{Effective degrees of freedom and RMSE for each of $\M{1}$ to
+$\M{5}$. Increasing diameter of the plotting symbols indicates larger
 numbers of maximum lags assumed in advance of model fitting.}
 \label{fig:ed}
 \end{figure}
 
-Figure \ref{fig:ed} clearly illustrates, for $\M{1}$ and $\M{5}$, that ED
-increases steeply with $p$, even though the underlying true lag function is
-identical. Furthermore, both the RMSE and ED are substantially smaller for the
-adaptive model $\M{3}$ compared to any of the others in the comparison, and
-indicate much better overall performance. The new adaptive approach $\M{3}$
-is more robust to user misspecification of `large' $p$, and the simulations
-raise concerns about the potential for overfitting using existing approaches.
-However, it is noted that the effective degrees of freedom for $\M{3}$ are
-not constant and do increase modestly with $p$, from 6.7 ($p = 50$) to 7.4
-($p = 125$). Model $\M{2}$ resulted in a comparatively favourable balance
-between RMSE and degrees of freedom, reinforcing the suggestion that adaptive
-models are preferable choices.
+SIMTWOTEXT
 
 \section{Illustrations with real data}
 \label{sec:real}
 
 Four applications illustrate how the adaptive lag curve behaves on noisy real
-data. Both use the accompanying software with its default settings: the random
+data. All use the accompanying software with its default settings: the random
 walk prior on the log precisions, an exact zero constraint at the maximum lag,
-$K = \lceil 2(p+1)/3 \rceil$ basis functions, and the collapsed NUTS sampler
-with two chains of 1000 retained draws. Effective degrees of freedom are
+$K = \lceil 2(p+1)/3 \rceil$ basis functions, and the collapsed sampler of
+Section \ref{sec:comp} with two chains of 1000 retained draws. Effective degrees of freedom are
 reported for the lag curve alone, excluding unpenalised terms. The scripts
 that reproduce them are in the software repository.
 
@@ -637,7 +749,10 @@ underlying lag function is identical, which suggests that the interpretation
 of lag estimates should be made with caution. A new model has been proposed
 that combines automatic adaptive smoothing with a pragmatically large choice
 of $p$ to ensure simple and flexible smoothing of the lag curve that avoids
-sensitivity to the choice of $p$. The real data illustrations in Section
+sensitivity to the choice of $p$, together with an inference scheme in which
+the lag coefficients are integrated out analytically, so that the remaining
+posterior is low dimensional, free of the funnel that hampers a Gibbs sampler,
+and sampled at a cost that does not grow with the length of the series. The real data illustrations in Section
 \ref{sec:real} show the adaptive curve reporting no structure where the data
 contain none, a sharp and short-lived response where there is one, a slowly
 decaying response over a hundred lags, the build-up and partial decay of price

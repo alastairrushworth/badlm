@@ -270,7 +270,22 @@ under the flat response M1 and M3 are indistinguishable and neither invents
 structure. The log-knot model M5 is competitive when the effect sits at short
 lags (decay curve, sharp peak) and worst when it does not.
 
-SIMTWOTABLE
+Fitting the displacement curve, which has 50 lags, with maximum lags of 50 to
+125 (20 replicates; RMSE over all p + 1 lags, scaled by 10^3):
+
+| Maximum lag p | M1 RMSE | M2 RMSE | M3 RMSE | M4 RMSE | M5 RMSE | M1 ED | M2 ED | M3 ED | M4 ED | M5 ED |
+|---|---|---|---|---|---|---|---|---|---|---|
+| 50 | 1.74 | 1.94 | 1.40 | 1.86 | 2.36 | 12.9 | 16.4 | 9.1 | 15.1 | 11.2 |
+| 75 | 1.78 | 1.83 | 1.29 | 1.92 | 2.16 | 17.3 | 21.0 | 10.0 | 21.0 | 12.8 |
+| 100 | 1.85 | 1.73 | 1.19 | 1.97 | 1.91 | 20.6 | 24.4 | 10.2 | 26.1 | 13.3 |
+| 125 | 1.87 | 1.64 | 1.11 | 2.01 | 1.81 | 23.5 | 27.1 | 10.9 | 31.1 | 13.2 |
+
+The adaptive model's effective degrees of freedom barely move as the assumed
+maximum lag grows, and its RMSE falls because the extra lags are estimated as
+zero; M1, M2 and M4 spend their extra basis functions on noise in the lags that
+do not matter.
+
+![effective degrees of freedom against RMSE](figures/simulation_ed_rmse.png)
 
 Run `python examples/simulation_study.py --reps 50 --reps2 20` to reproduce
 (about six hours on four cores); results, the LaTeX table and the figures are

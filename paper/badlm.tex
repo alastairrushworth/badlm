@@ -557,7 +557,33 @@ numbers of maximum lags assumed in advance of model fitting.}
 \label{fig:ed}
 \end{figure}
 
-SIMTWOTEXT
+Figure \ref{fig:ed} shows that the adaptive model is almost indifferent to
+the choice of maximum lag. Its effective degrees of freedom rise only from
+9.1 at $p = 50$ to 10.9 at $p = 125$, although the number of basis
+functions, and so the flexibility on offer, grows from 34 to 84: the random
+walk prior on the log precisions settles on a high precision across the
+added lags, where the data show nothing, and the fitted curve there is a
+straight line at zero. Its RMSE, which averages the squared error over all
+$p + 1$ lags, consequently falls from 1.40 to 1.11, because the added lags
+are estimated almost without error and dilute the error in the first 50,
+and $\M{3}$ has the lowest error of the five models at every $p$, in every
+one of the 20 replicates when compared with $\M{1}$, $\M{2}$ or $\M{4}$. The
+single-penalty P-spline $\M{1}$ and the P-spline with ridge $\M{4}$ behave
+quite differently: their effective degrees of freedom grow almost in
+proportion to $p$, from 12.9 to 23.5 and from 15.1 to 31.1, because the one
+smoothing parameter must stay small enough to follow the
+\scen{Displacement} shape over the first 50 lags and then lets the curve
+wander over the lags that follow, and their RMSE rises with $p$ even though
+the added lags should be easy to estimate. The lag-increasing ridge of
+$\M{2}$ does shrink the distant lags, so its RMSE falls with $p$, but its
+effective degrees of freedom still climb to 27 and its error at $p = 125$
+remains about 50 per cent above that of $\M{3}$. The log-knot model $\M{5}$
+keeps its degrees of freedom roughly constant by construction, because its
+knots are concentrated at short lags, but it is the least accurate model of
+all at $p = 50$ and $75$. The cost of the adaptive model's $K - 1$
+hyperparameters is again computational: its fitting time grows from 28
+seconds at $p = 50$ to about two minutes at $p = 125$, against 11 to 19
+seconds for the other Bayesian models at every $p$.
 
 \section{Illustrations with real data}
 \label{sec:real}

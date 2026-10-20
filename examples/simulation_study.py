@@ -142,12 +142,25 @@ def k_for(p):
 
 
 # ------------------------------------------------------------------ driver
+def load_partial(out, keys):
+    """Resume from a previous run: results saved after every replicate."""
+    results = {k: {m: [] for m in ("M1", "M2", "M3", "M4", "M5")} for k in keys}
+    if os.path.exists(out):
+        saved = json.load(open(out))
+        for k in keys:
+            for m in results[k]:
+                results[k][m] = saved.get(k, {}).get(m, [])
+    return results
+
+
 def run_study1(reps, out):
     curves = paper_lag_curves(50)
-    results = {c: {m: [] for m in ("M1", "M2", "M3", "M4", "M5")} for c in curves}
+    results = load_partial(out, list(curves))
     t0 = time.time()
     for cname, truth in curves.items():
         for r in range(reps):
+            if len(results[cname]["M3"]) > r:
+                continue
             x, y = simulate_dlm(truth, seed=10_000 + r, **SIM)
             fits = fit_all(x, y, 50, k_for(50), seed=r)
             for m, (est, ed, dt) in fits.items():
@@ -161,11 +174,15 @@ def run_study1(reps, out):
 def run_study2(reps, out):
     truth = paper_lag_curves(50)["displacement"]
     ps = (50, 75, 100, 125)
-    results = {str(p): {m: [] for m in ("M1", "M2", "M3", "M4", "M5")} for p in ps}
+    results = load_partial(out, [str(p) for p in ps])
     t0 = time.time()
     for r in range(reps):
+        if len(results[str(ps[-1])]["M3"]) > r:
+            continue
         x, y = simulate_dlm(truth, seed=20_000 + r, **SIM)
         for p in ps:
+            if len(results[str(p)]["M3"]) > r:
+                continue
             full = np.r_[truth, np.zeros(p - 50)]
             fits = fit_all(x, y, p, k_for(p), seed=r)
             for m, (est, ed, dt) in fits.items():

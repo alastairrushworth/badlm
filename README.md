@@ -229,6 +229,133 @@ between the NUTS, Gibbs and Laplace fits; and recovery of known lag curves for
 every prior, constraint and family. `pytest -m slow` additionally runs a
 simulation-based calibration check of the NUTS sampler.
 
+## Simulation study
+
+`examples/simulation_study.py` re-runs the paper's simulation study with the
+collapsed sampler. It compares the adaptive model (M3) with the non-adaptive
+model (M1), a Bayesian ridge penalty increasing with lag (M2, Muggeo 2008), a
+Bayesian P-spline with an added ridge (M4, Obermeier et al. 2015) and
+log-spaced knots chosen by AIC (M5, Gasparrini et al. 2010) on five lag-curve
+shapes, and then examines how each model's effective degrees of freedom and
+error change as the assumed maximum lag grows from 50 to 125 on a curve that
+really has 50 lags. The published curves are not available in closed form, so
+`badlm.paper_lag_curves` provides approximations with the same features.
+
+SIMTABLE
+
+Run `python examples/simulation_study.py --reps 50 --reps2 20` to reproduce
+(about six hours on four cores); results, the LaTeX table and the figures are
+written to `paper/results`, `paper/tables` and `paper/figures`.
+
+## Examples with real data
+
+Two scripts apply the model to public data, downloaded on first use into
+`examples/data/`.
+
+**Stock market data** (`python examples/stocks.py`). Prices are transformed to
+percentage log returns, `r_t = 100 log(P_t / P_{t-1})`, for the S&P 500, Apple
+and the VIX over 2007 to 2016, and four lag curves are fitted with the default
+settings:
+
+![stock market lag curves](figures/stocks_lag_curves.png)
+
+- *(a)* Next-day S&P 500 return on the previous 20 days' returns: a short-lived
+  reversal, -0.10 (95% interval -0.15 to -0.06) per percentage point at lag one and zero within a week, with
+  a cumulative effect of -0.23 (-0.42 to -0.03) and 4.7 effective degrees of freedom.
+- *(b)* The same for Apple: indistinguishable from zero everywhere with 1.7
+  effective degrees of freedom. The adaptive smoother reports an absence of
+  structure rather than inventing it.
+- *(c)* Daily change in log VIX on the same day's and the previous 60 days' S&P
+  500 returns: implied volatility moves -4.1 (-4.2 to -3.9) per cent for each percentage
+  point of index return on the same day, rebounds slightly over the following week,
+  and shows nothing beyond about ten days.
+- *(d)* Log absolute return on its own past over 100 days: volatility
+  clustering, strongest at lags two to three, decaying over about a month and
+  small but mostly positive thereafter, with a cumulative elasticity of 0.84
+  (0.75 to 0.94) described by 7.9 effective degrees of freedom.
+
+**Intraday microstructure of SPY** (`python examples/microstructure.py`, needs
+pandas on the first run). Every trade and quote for SPY and BAC on 7 to 11
+October 2013, from the sample data in the QuantConnect Lean repository, reduced
+to one-second series: midquote returns in basis points from the best bid and
+offer of the four most active venues, order-flow imbalance (buyer- minus
+seller-initiated trades, signed against the prevailing midquote), volume and
+spread. Lags are formed within each day (`groups=day`) and B-splines of time of
+day absorb the intraday pattern.
+
+![microstructure lag curves](figures/microstructure_lag_curves.png)
+
+- *(a, b) Price impact.* One more buy than sell trade in a second moves the
+  midquote by 0.0061 bp in that second. The response keeps building for about
+  seven seconds, to 0.0093 bp, and then about 15% of it decays away over the
+  next minute, leaving a permanent impact of 0.0079 bp (0.0074 to 0.0084).
+  The decay is the transient component of impact that microstructure models
+  describe with a propagator; here its shape is estimated rather than assumed.
+- *(c, f) Memory of order flow.* The imbalance one second earlier predicts
+  the current imbalance with coefficient 0.16 for SPY and 0.11 for BAC, but
+  the tail is what matters: the coefficients over the following five minutes
+  sum to 0.38 for SPY and 0.57 for BAC, and BAC's curve stays positive to
+  about 100 s. Order flow in the large-tick stock is more persistent, as order
+  splitting in a deep queue predicts.
+- *(d) Volatility after volume.* A thousand shares traded a second earlier
+  raise the next second's absolute return by 0.001 bp, decaying over about a
+  minute with a secondary bump at six to seven seconds, the time the price
+  takes to absorb order flow in (b).
+- *(e) Volume after volatility.* One basis point of absolute return attracts
+  about 1,400 extra shares in the next second and roughly 22,000 over the
+  following two minutes.
+
+Each curve uses between 8 and 12 effective degrees of freedom for 120 to 300
+lags; all have R-hat at or below 1.03.
+
+**Air pollution and mortality in Chicago** (`python examples/chicago.py`). Daily
+deaths in Chicago from 1987 to 2000 on 40 lags of PM10, adjusting for trend and
+season, weekday, temperature and dew point, with AR(1) errors; coefficients are
+percentage changes in deaths per 10 µg/m³. The data are the `chicagoNMMAPS`
+set from the dlnm R package, included in the repository.
+
+![Chicago lag curves](figures/chicago_lag_curves.png)
+
+- All-cause deaths rise by 0.15% per 10 µg/m³ on the day of exposure (-0.02 to
+  0.36) and fall by a similar amount around a week later, where the band lies
+  below zero, so the cumulative effect over 40 days is indistinguishable from
+  zero: -0.20% (-1.30 to 0.85). Deaths are brought forward by a few days rather
+  than added, the "mortality displacement" pattern discussed in the paper, and
+  the lag curve shows it directly without any lag structure specified in
+  advance. The curve uses about five effective degrees of freedom.
+- Cardiovascular deaths show the same shape with smaller amplitude.
+  Respiratory deaths, nine a day, are too few to show anything.
+
+**COVID-19 cases and deaths** (`python examples/covid.py [--negbin]`). Daily US
+deaths from June 2020 to March 2021 are regressed, on the log scale, on the
+seven-day mean of new cases over the previous 35 days, with weekday indicators
+for the reporting pattern and AR(1) errors; the coefficients are elasticities.
+
+![COVID-19 lag curve](figures/covid_lag_curve.png)
+
+The cumulative elasticity is 0.74 (0.66 to 0.81): a 10% rise in cases is followed by about
+a 7% rise in deaths, the shortfall from one reflecting the falling case
+fatality ratio over the period. The curve peaks at about three weeks and is
+back at zero by five, and uses under three effective degrees of freedom. Individual lags are poorly identified because the
+smoothed case series is collinear across lags: the data determine the total and
+the timing, the adaptive prior supplies the smoothness. Deaths reported on
+Tuesday to Friday are about 2.5 times Sunday's. A negative binomial model of
+the raw counts (`--negbin`, dashed) agrees on the total, 0.73 (0.68 to 0.77),
+and on the peak, but its sampler did not converge properly (R-hat 1.4 and many
+divergent transitions): the dependence between the curve and its smoothing
+parameters that the Gaussian model integrates out remains in a count model.
+Treat count models with highly collinear lags as work in progress and prefer
+the Gaussian log-scale model when counts are large.
+
+## Validation
+
+The test suite (`pytest`) checks the collapsed likelihood against brute-force
+Gaussian marginals, including AR(1) errors; the closed-form generalised
+determinants; a Geweke "getting it right" test of the Gibbs sampler; agreement
+between the NUTS, Gibbs and Laplace fits; and recovery of known lag curves for
+every prior, constraint and family. `pytest -m slow` additionally runs a
+simulation-based calibration check of the NUTS sampler.
+
 ## Replicating the paper's comparison
 
 `examples/replicate_paper.py` fits the adaptive (M3) and non-adaptive (M1)

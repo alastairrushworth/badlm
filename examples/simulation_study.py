@@ -212,7 +212,7 @@ def write_outputs(res1, res2):
         if c not in s1:
             continue
         for i, (stat, name) in enumerate((("rmse", "RMSE"), ("bias2", "Bias$^2$"), ("ed", "ED"))):
-            scale = 1e3 if stat != "ed" else 1.0
+            scale = {"rmse": 1e3, "bias2": 1e6, "ed": 1.0}[stat]
             cells = " & ".join(f"{scale * s1[c][m][stat]:.2f}" for m in ("M1", "M2", "M3", "M4", "M5"))
             first = f"\\scen{{{lab}}}" if i == 1 else ""
             lines.append(f"{first} & {name} & {cells} \\\\")

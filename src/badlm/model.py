@@ -368,13 +368,14 @@ class BADLM:
 
     def to_arviz(self):
         """Convert the draws to an ``arviz.InferenceData`` object."""
+        import inspect
+
         import arviz as az
 
         posterior = {k: np.asarray(v) for k, v in self.draws_.items() if np.asarray(v).ndim >= 2}
         groups = {"posterior": posterior}
         if self.extra_:
             groups["sample_stats"] = {k: np.asarray(v) for k, v in self.extra_.items()}
-        try:                                    # ArviZ >= 1.0 takes a dict of groups
-            return az.from_dict(groups)
-        except TypeError:                       # ArviZ 0.x takes keyword groups
+        if "posterior" in inspect.signature(az.from_dict).parameters:   # ArviZ 0.x: keyword groups
             return az.from_dict(**groups)
+        return az.from_dict(groups)                                      # ArviZ >= 1.0: dict of groups

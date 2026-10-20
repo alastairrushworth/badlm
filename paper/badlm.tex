@@ -488,7 +488,51 @@ sets. RMSE has been scaled by $10^3$ and Bias$^2$ by $10^6$.}
 \label{tab:sim}
 \end{table}
 
-SIMONETEXT
+Table \ref{tab:sim} summarises the results. The adaptive model $\M{3}$ has
+the lowest RMSE under each of the four lag curves with a non-null effect,
+and the margin is widest where the curve changes character along the lag
+axis. Relative to the best of the other four models its RMSE is 23 per cent
+lower under the \scen{Delayed peak} curve, 24 per cent lower under
+\scen{Sharp peak}, 17 per cent lower under \scen{Displacement} and 11 per
+cent lower under \scen{Decay curve}, and in each of these scenarios it
+attains the lower error in at least 96 per cent of the 50 replicates when
+compared replicate by replicate with $\M{1}$, $\M{2}$ or $\M{4}$. The
+single-penalty P-spline $\M{1}$ is the strongest of the other Bayesian
+models under the three smooth curves, but under \scen{Sharp peak}, where one
+smoothing parameter must compromise between the steep rise at short lags
+and the long flat tail, it and $\M{4}$ are the worst models of all, with
+RMSE more than double that of $\M{3}$. The ridge component of $\M{4}$ adds a little error to $\M{1}$ in
+every scenario, and the lag-increasing ridge of $\M{2}$ does so under the
+three smooth curves, although it helps under \scen{Sharp peak}, whose effect
+is confined to the short lags that its penalty leaves relatively free. The
+log-knot model $\M{5}$ is competitive under \scen{Decay curve} and
+\scen{Sharp peak}, whose features lie at the short lags where its knots are
+dense, but it has the largest error of all under \scen{Delayed peak}, whose
+feature lies at intermediate lags, and under \scen{Flat response}, where AIC
+selects spurious structure. Under that null curve the four Bayesian models
+are close, and $\M{1}$ and $\M{3}$ are indistinguishable, each using about
+2.5 effective degrees of freedom: the adaptive prior does not invent
+structure when there is none to find. Under the four non-null curves the
+squared bias is a small part of the mean squared error for every model, so
+the differences in RMSE reflect the variance of the estimates rather than
+systematic error in their level; under \scen{Flat response}, where the
+fitted curves are almost straight lines, the error of a Bayesian model is
+mostly a small shift in the level of the curve, which the ridge penalties of
+$\M{2}$ and $\M{4}$ shrink towards zero.
+
+The effective degrees of freedom show the mechanism. $\M{3}$ uses fewer
+effective parameters than $\M{1}$, $\M{2}$ and $\M{4}$ under every curve,
+and under the four non-null curves it uses between a fifth and three fifths
+fewer than $\M{1}$ (for example 5.7 against 14.0 under \scen{Sharp peak} and
+8.8 against 13.3 under \scen{Delayed peak}). Lower error with fewer
+effective parameters is the signature of adaptive smoothing: the lag-varying
+precision is high, and the fitted curve close to linear, over the flat part
+of each curve, and is relaxed only where the curve actually moves. The
+price is computational. With the collapsed sampler of Section
+\ref{sec:comp} a fit of $\M{3}$ took about 25 seconds on a single CPU core
+against 10 to 13 seconds for $\M{1}$, $\M{2}$ and $\M{4}$, whose
+hyperparameter spaces have one or two dimensions rather than $K - 1$, and
+well under a second for the least squares fit of $\M{5}$.
 
 \subsection{DLM misspecification with maximum lag $p$}
 \label{sec:sim2}

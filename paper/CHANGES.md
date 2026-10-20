@@ -1,5 +1,32 @@
 # Changes relative to arXiv:1801.06670v1
 
+## This revision: inference rewritten around the collapsed sampler
+
+- Section 2 now imposes the end constraint exactly through a null-space
+  parameterisation (no pseudo-observation) and states the priors as
+  implemented: penalised-complexity priors on the scale and on the level of
+  the random walk over log precisions, Inverse-Gamma(0.001, 0.001) on the
+  error variance, flat priors on unpenalised terms, internal standardisation.
+- A new Section 3, "Computation", describes the inference scheme: the
+  marginal likelihood with the coefficients integrated out, the closed-form
+  generalised determinant of the prior precision (matrix-tree theorem, with
+  and without the end constraint), sufficient statistics quadratic in the
+  AR(1) coefficient, the cap on log precisions, NUTS on the non-centred
+  parameterisation with a dense mass matrix and a Laplace start, post-hoc
+  coefficient draws and effective degrees of freedom, the validation checks,
+  and the software. All mention of the Gibbs/Metropolis scheme of v1 as the
+  method of inference is removed.
+- Section 4, the simulation study, was re-run from scratch with the new
+  sampler using `examples/simulation_study.py`. The five lag curves are the
+  approximations in `badlm.paper_lag_curves` (the originals were not available
+  in closed form), the covariate is standardised, and 50 replicates (Section
+  4.1) and 20 replicates (Section 4.2) were used instead of 200. Models M2 and
+  M4 are Bayesian implementations fitted with the same collapsed sampler;
+  M5 is fitted by least squares with AIC knot selection. Table 1, Figure 1 and
+  Figure 2 are all new; the v1 numbers no longer appear.
+- The abstract mentions the inference scheme; the Discussion summarises it.
+
+
 `badlm.tex` is a reconstruction of the preprint from its PDF (the original
 LaTeX source was not available), with the edits listed below. Figure 1 is the
 raster image embedded in the PDF; Figure 2 is the vector plot cropped from

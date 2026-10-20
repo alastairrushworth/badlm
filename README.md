@@ -229,39 +229,52 @@ between the NUTS, Gibbs and Laplace fits; and recovery of known lag curves for
 every prior, constraint and family. `pytest -m slow` additionally runs a
 simulation-based calibration check of the NUTS sampler.
 
-## Replicating the paper's comparison
+## Simulation study
 
-`examples/replicate_paper.py` fits the adaptive (M3) and non-adaptive (M1)
-models to simulated data under five lag-curve shapes, as in Section 3.1 of the
-paper. The published curves are not available in closed form, so
+`examples/simulation_study.py` re-runs the paper's simulation study with the
+collapsed sampler. It compares the adaptive model (M3) with the non-adaptive
+model (M1), a Bayesian ridge penalty increasing with lag (M2, Muggeo 2008), a
+Bayesian P-spline with an added ridge (M4, Obermeier et al. 2015) and
+log-spaced knots chosen by AIC (M5, Gasparrini et al. 2010) on five lag-curve
+shapes, and then examines how each model's effective degrees of freedom and
+error change as the assumed maximum lag grows from 50 to 125 on a curve that
+really has 50 lags. The published curves are not available in closed form, so
 `badlm.paper_lag_curves` provides approximations with the same features.
 
-With 10 replicates per scenario, the exposure standardised and noise sd 0.02
-(RMSE and squared bias scaled by 1e3, ED the posterior mean effective degrees
-of freedom of the lag curve):
+With 50 replicates per lag curve (RMSE scaled by 10^3, squared bias by 10^6,
+ED the posterior mean effective degrees of freedom of the lag curve, or the
+number of basis functions chosen for M5):
 
-| Lag curve | Summary | M1 | M3 |
-|---|---|---|---|
-| delayed_peak | RMSE | 0.55 | 0.36 |
-| delayed_peak | Bias2 | 0.00 | 0.00 |
-| delayed_peak | ED | 23.43 | 10.68 |
-| decay_curve | RMSE | 0.44 | 0.34 |
-| decay_curve | Bias2 | 0.00 | 0.00 |
-| decay_curve | ED | 17.16 | 11.53 |
-| flat_response | RMSE | 0.13 | 0.13 |
-| flat_response | Bias2 | 0.00 | 0.00 |
-| flat_response | ED | 2.61 | 2.57 |
-| displacement | RMSE | 0.56 | 0.42 |
-| displacement | Bias2 | 0.00 | 0.00 |
-| displacement | ED | 22.95 | 13.55 |
-| sharp_peak | RMSE | 0.81 | 0.35 |
-| sharp_peak | Bias2 | 0.00 | 0.00 |
-| sharp_peak | ED | 27.01 | 6.53 |
+| Lag curve | Summary | M1 | M2 | M3 | M4 | M5 |
+|---|---|---|---|---|---|---|
+| Delayed peak | RMSE (x10^3) | 1.98 | 2.26 | 1.53 | 2.12 | 2.54 |
+| Delayed peak | Bias^2 (x10^6) | 0.50 | 0.48 | 0.40 | 0.52 | 0.52 |
+| Delayed peak | ED | 13.32 | 17.86 | 8.84 | 15.48 | 12.32 |
+| Decay curve | RMSE (x10^3) | 1.45 | 1.99 | 1.29 | 1.51 | 1.45 |
+| Decay curve | Bias^2 (x10^6) | 0.48 | 0.53 | 0.43 | 0.50 | 0.52 |
+| Decay curve | ED | 8.80 | 15.32 | 7.04 | 9.38 | 5.28 |
+| Flat response | RMSE (x10^3) | 0.59 | 0.62 | 0.59 | 0.70 | 1.35 |
+| Flat response | Bias^2 (x10^6) | 0.32 | 0.08 | 0.32 | 0.17 | 0.51 |
+| Flat response | ED | 2.57 | 4.29 | 2.52 | 4.63 | 4.98 |
+| Displacement | RMSE (x10^3) | 1.95 | 2.14 | 1.61 | 2.11 | 2.36 |
+| Displacement | Bias^2 (x10^6) | 0.50 | 0.37 | 0.42 | 0.48 | 0.51 |
+| Displacement | ED | 13.02 | 16.58 | 9.29 | 15.33 | 10.94 |
+| Sharp peak | RMSE (x10^3) | 2.84 | 2.23 | 1.29 | 2.92 | 1.69 |
+| Sharp peak | Bias^2 (x10^6) | 0.54 | 0.35 | 0.35 | 0.55 | 0.51 |
+| Sharp peak | ED | 14.00 | 15.08 | 5.65 | 16.06 | 6.56 |
 
-The adaptive model has lower RMSE and far fewer effective degrees of freedom
-in every non-null scenario, and both models correctly find almost no structure
-under the flat response, matching the qualitative conclusions of the paper.
-Rerun with `python examples/replicate_paper.py N` for `N` replicates.
+The adaptive model has the lowest RMSE under every non-null curve, by 11 to 24
+per cent relative to the best competitor, while using between a fifth and three
+fifths fewer effective degrees of freedom than the single-penalty P-spline M1;
+under the flat response M1 and M3 are indistinguishable and neither invents
+structure. The log-knot model M5 is competitive when the effect sits at short
+lags (decay curve, sharp peak) and worst when it does not.
+
+SIMTWOTABLE
+
+Run `python examples/simulation_study.py --reps 50 --reps2 20` to reproduce
+(about six hours on four cores); results, the LaTeX table and the figures are
+written to `paper/results`, `paper/tables` and `paper/figures`.
 
 ## Citation
 

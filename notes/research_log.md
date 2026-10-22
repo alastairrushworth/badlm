@@ -167,9 +167,31 @@ weekly-target problem of the third batch).
   one (coefficient +0.125) feeding every series. Most of this is the
   time-zone artefact: UK stocks close before the US afternoon and the
   currencies are noon fixings, so their next close-to-close return contains
-  the US move that the backtest treats as a lagged, tradable signal. A
-  synchronous US-only run separates the artefact from any real large-to-
-  small lead-lag.
+  the US move that the backtest treats as a lagged, tradable signal.
+- **Synchronous US-only universe** (36 series that close at 4 pm New York,
+  drivers: own past, US market, dollar, commodities, loading scale 0.2): the
+  basket drivers make things worse, IC 0.014 against 0.020 for own past
+  alone and 0.25 / 0.22 against 0.54 / 0.52; the US market's lag-one
+  coefficient is -0.02, a slight reversal, and the dollar and commodity
+  curves are flat. With this shrinkage the loadings sit at one (sd 0.09):
+  thirty-six large US names behave as one pooled curve. Pillar A fails its
+  kill criterion: the spectacular cross-asset result was the time-zone
+  artefact, and the synchronous panel has no daily lead-lag to trade. A
+  genuine test needs intraday or open-to-close returns for the
+  non-synchronous markets, or a universe with small and illiquid names.
+
+## The held-out years (2019 onwards, used once)
+
+- Asset-level volatility surface, slow rule, net of 5 bp: wide panel
+  -0.03 (IC 0.008 against 0.022 in development), currencies 0.07 (IC 0.003
+  against 0.034). Deflated Sharpe probabilities 0.43 and 0.49 against twelve
+  trials: indistinguishable from nothing. The three development sub-periods
+  were consistent; the held-out period is not. Whatever the surface captures
+  faded after 2018 in these series, which matches the fading of the plain
+  momentum plateau seen in the first sessions. No further tuning on the
+  held-out years: the next attempt needs new data (futures with carry,
+  intraday returns for synchronous lead-lag, a broad stock cross-section)
+  rather than new variants on this panel.
 
 ## Data notes
 

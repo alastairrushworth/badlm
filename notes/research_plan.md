@@ -1,5 +1,12 @@
 # Research plan: from lag curves to robust multi-asset trading
 
+*Status after the first pass (see the README section "The multivariate
+plan: first pass" and `notes/research_log.md`): pillars A to D were built
+and run on the wide panel; none beat the asset-level volatility surface,
+and that surface earned nothing in the held-out years. The plan's
+principles stand; its next iteration needs the data listed in pillar F
+before any further modelling.*
+
 ## Where we stand
 
 Two sessions of experiments established three facts. A single adaptive lag

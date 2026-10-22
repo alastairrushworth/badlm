@@ -125,18 +125,28 @@ class Structure:
         return b_raw - self.C[0] @ b_raw
 
 
-def build_structure(p, K, deg=3, end_constraint="zero"):
+LAG_SCALES = ("linear", "log")
+
+
+def build_structure(p, K, deg=3, end_constraint="zero", lag_scale="linear"):
+    """Lag-curve parameterisation. ``lag_scale='log'`` places the equally spaced
+    B-spline knots on ``log(1 + lag)``, so that the curve can change quickly at
+    short lags and only slowly at long ones."""
     if end_constraint not in END_CONSTRAINTS:
         raise ValueError(f"end_constraint must be one of {END_CONSTRAINTS}")
+    if lag_scale not in LAG_SCALES:
+        raise ValueError(f"lag_scale must be one of {LAG_SCALES}")
     if K < deg + 1:
         raise ValueError(f"K must be at least {deg + 1}")
     lags = np.arange(p + 1, dtype=float)
-    B = bspline_basis(lags, nseg=K - deg, deg=deg, domain=(0.0, float(p)))
+    u = np.log1p(lags) if lag_scale == "log" else lags
+    dom = (0.0, float(u[-1]))
+    B = bspline_basis(u, nseg=K - deg, deg=deg, domain=dom)
     rows = []
     if end_constraint in ("zero", "zero_slope"):
         rows.append(B[-1])
     if end_constraint == "zero_slope":
-        rows.append(bspline_basis([float(p)], nseg=K - deg, deg=deg, domain=(0.0, float(p)), derivative=1)[0])
+        rows.append(bspline_basis([u[-1]], nseg=K - deg, deg=deg, domain=dom, derivative=1)[0])
     C = np.array(rows).reshape(len(rows), K)
     m = len(rows)
     Z = np.eye(K) if m == 0 else null_space(C)
@@ -172,9 +182,15 @@ class SuffStats:
     N: int
 
     @staticmethod
-    def from_data(X, y):
+    def from_data(X, y, weights=None):
+        """Sufficient statistics; with ``weights`` each row of ``X`` and ``y`` is
+        multiplied by the square root of its weight (inverse-variance weighting)."""
         X = np.asarray(X, float)
         y = np.asarray(y, float)
+        if weights is not None:
+            sw = np.sqrt(np.asarray(weights, float).ravel())
+            X = X * sw[:, None]
+            y = y * sw
         X0, X1, Xm = X[:-1], X[1:], X[1:-1]
         y0, y1, ym = y[:-1], y[1:], y[1:-1]
         return SuffStats(
@@ -201,13 +217,16 @@ def ar1_whitening_matrix(n, phi):
 
 @dataclass
 class Standardizer:
-    x_mean: float
-    x_sd: float
+    x_mean: float | np.ndarray
+    x_sd: float | np.ndarray
     y_mean: float
     y_sd: float
 
     def x(self, x):
-        return (np.asarray(x, float) - self.x_mean) / self.x_sd
+        x = np.asarray(x, float)
+        if x.ndim == 2 and np.ndim(self.x_mean) == 1:
+            return (x - np.asarray(self.x_mean)[None, :]) / np.asarray(self.x_sd)[None, :]
+        return (x - self.x_mean) / self.x_sd
 
     def y(self, y):
         return (np.asarray(y, float) - self.y_mean) / self.y_sd
@@ -223,6 +242,10 @@ class DesignData:
     y: np.ndarray            # (N,) response on the model scale
     offset: np.ndarray       # (N,)
     stats: SuffStats | None  # Gaussian sufficient statistics
+    Ls: list | None = None   # lag matrices of every exposure (multi-exposure fits)
+    z: np.ndarray | None = None        # modifier values per retained row
+    weights: np.ndarray | None = None  # observation weights per retained row
+    keep: np.ndarray | None = None     # indices of the retained rows in the input
 
     @property
     def N(self):
@@ -296,3 +319,203 @@ def build_design(x, y, struct, covariates=None, intercept=True, offset=None,
     y_model = std.y(y) if family == "gaussian" else y
     stats = SuffStats.from_data(X, y_model - off) if family == "gaussian" else None
     return DesignData(L=L, W=W, X=X, y=y_model, offset=off, stats=stats), std
+
+
+# ----------------------------------------------------------------------------
+# Modifier bases and lag components (multi-exposure and tensor-product curves)
+# ----------------------------------------------------------------------------
+@dataclass
+class ModifierBasis:
+    """B-spline basis over a modifier variable ``z`` (time, volatility, the
+    exposure level) that lets the lag curve vary smoothly with ``z``.
+
+    The roughness penalty along ``z`` is the first-difference penalty
+    ``P = D'D`` whose null space is 'constant in z', i.e. the static curve, so
+    shrinking its scale recovers the ordinary model.
+    """
+
+    K: int
+    deg: int
+    domain: tuple
+    kind: str                    # 'covariate' or 'time'
+    P: np.ndarray                # (K, K) first-difference penalty
+    mu: np.ndarray               # eigenvalues of P (ascending; mu[0] == 0)
+    V: np.ndarray                # eigenvectors of P
+
+    def basis(self, z):
+        z = np.clip(np.asarray(z, float).ravel(), self.domain[0], self.domain[1])
+        return bspline_basis(z, nseg=self.K - self.deg, deg=self.deg, domain=self.domain)
+
+    def grid(self, n=5):
+        return np.linspace(self.domain[0], self.domain[1], n)
+
+
+def build_modifier(z, K=6, deg=3, kind="covariate", domain=None, trim=0.01):
+    """Modifier basis with the domain taken from the central ``1 - 2 trim`` of
+    the training values (``kind='covariate'``) or ``[0, 1]`` (``kind='time'``)."""
+    if K < deg + 1:
+        raise ValueError(f"modifier K must be at least {deg + 1}")
+    if domain is None:
+        if kind == "time":
+            domain = (0.0, 1.0)
+        else:
+            z = np.asarray(z, float).ravel()
+            lo, hi = np.quantile(z, [trim, 1.0 - trim])
+            if hi <= lo:
+                lo, hi = float(z.min()), float(z.max() + 1e-12)
+            domain = (float(lo), float(hi))
+    D = difference_matrix(K)
+    P = D.T @ D
+    mu, V = np.linalg.eigh(P)
+    mu = np.maximum(mu, 0.0)
+    mu[0] = 0.0
+    return ModifierBasis(K=K, deg=deg, domain=tuple(domain), kind=kind, P=P, mu=mu, V=V)
+
+
+@dataclass
+class LagComponent:
+    """One exposure's lag curve: a :class:`Structure` and, optionally, a
+    :class:`ModifierBasis` that makes the curve a surface over lag and ``z``.
+
+    Coefficients are ordered ``(k, l) -> k * K_z + l``: lag basis function ``k``,
+    modifier basis function ``l``. The prior precision is the Kronecker sum
+    ``Q_lag(tau) (x) I + kappa I (x) P_z`` whose log-determinant follows from the
+    eigenvalues of the two factors.
+    """
+
+    struct: Structure
+    modifier: ModifierBasis | None = None
+
+    @property
+    def K_z(self):
+        return 1 if self.modifier is None else self.modifier.K
+
+    @property
+    def dim(self):
+        return self.struct.K_r * self.K_z
+
+    @property
+    def n_tau(self):
+        return self.struct.K_tau
+
+    def design(self, L, z=None):
+        """Design block for lag matrix ``L`` (standardised exposure) and modifier
+        values ``z`` (one per row of ``L``)."""
+        LB = L @ self.struct.B_r
+        if self.modifier is None:
+            return LB
+        Cz = self.modifier.basis(z)
+        return (LB[:, :, None] * Cz[:, None, :]).reshape(L.shape[0], -1)
+
+    def curve(self, b, z=None, weights=None):
+        """Lag curve(s) from coefficients ``b`` (``..., dim``). Without a modifier
+        the result has shape ``(..., p + 1)``. With one, ``z`` (scalar or array)
+        gives the curve at those modifier values, shape ``(..., len(z), p + 1)``;
+        alternatively ``weights`` (``K_z``,) averages the modifier basis, which
+        gives the curve at the average training state."""
+        b = np.asarray(b, float)
+        B_r = self.struct.B_r
+        if self.modifier is None:
+            return b @ B_r.T
+        bm = b.reshape(b.shape[:-1] + (self.struct.K_r, self.K_z))
+        if weights is not None:
+            return (bm @ np.asarray(weights, float)) @ B_r.T
+        Cz = self.modifier.basis(np.atleast_1d(z))                # (nz, K_z)
+        surf = np.einsum("...kl,zl->...zk", bm, Cz)
+        return surf @ B_r.T
+
+
+def build_multi_design(X_exp, y, components, covariates=None, intercept=True, offset=None,
+                       standardize=True, family="gaussian", groups=None, weights=None, modifier=None):
+    """Assemble the design for several exposures, optional modifier and weights.
+
+    ``X_exp`` has shape ``(n, E)``; component ``e`` receives column ``e`` lagged
+    to ``components[e].struct.p``. All lag matrices are aligned on the rows
+    that have every lag available for the longest ``p``. ``modifier`` is a
+    series of length ``n`` (or the string ``'time'``). ``weights`` (length ``n``
+    or number of retained rows) multiply the squared residuals; they are the
+    inverse of an ex-ante variance when the response is heteroskedastic.
+    """
+    X_exp = np.asarray(X_exp, float)
+    if X_exp.ndim == 1:
+        X_exp = X_exp[:, None]
+    n, E = X_exp.shape
+    if E != len(components):
+        raise ValueError("number of exposure columns must match the number of components")
+    y = np.asarray(y, float).ravel()
+    if np.any(~np.isfinite(X_exp)) or np.any(~np.isfinite(y)):
+        raise ValueError("x and y must be finite; missing values are not supported")
+    p_max = max(c.struct.p for c in components)
+    if p_max < 1 or p_max >= n:
+        raise ValueError("nlag must be between 1 and len(x) - 1")
+    if groups is None:
+        segments = [np.arange(n)]
+    else:
+        groups = np.asarray(groups).ravel()
+        if groups.size != n:
+            raise ValueError("groups must have the same length as x")
+        _, first = np.unique(groups, return_index=True)
+        segments = [np.where(groups == groups[i])[0] for i in np.sort(first)]
+        if min(len(seg) for seg in segments) <= p_max:
+            raise ValueError("every group must have more than nlag observations")
+    keep = np.concatenate([seg[p_max:] for seg in segments])
+    N = keep.size
+
+    def rows(v, name):
+        v = np.asarray(v, float)
+        if v.shape[0] == n:
+            return v[keep]
+        if v.shape[0] == N:
+            return v
+        raise ValueError(f"{name} must have len(x) or len(x) - nlag * n_groups rows")
+
+    y = rows(y, "y")
+    if family == "gaussian" and standardize:
+        y_mean = float(y.mean()) if intercept else 0.0
+        y_sd = float(y.std(ddof=1)) if y.std(ddof=1) > 0 else 1.0
+    else:
+        y_mean, y_sd = 0.0, 1.0
+    if standardize:
+        x_mean = X_exp.mean(axis=0)
+        x_sd = X_exp.std(axis=0, ddof=1)
+        x_sd = np.where(x_sd > 0, x_sd, 1.0)
+    else:
+        x_mean, x_sd = np.zeros(E), np.ones(E)
+    std = Standardizer(x_mean=x_mean, x_sd=x_sd, y_mean=y_mean, y_sd=y_sd)
+    xs = std.x(X_exp)
+
+    z = None
+    if any(c.modifier is not None for c in components):
+        if modifier is None:
+            raise ValueError("this model has a modifier; pass modifier= to fit")
+        if isinstance(modifier, str) and modifier == "time":
+            # position of each retained row in the input series, scaled to [0, 1];
+            # for stacked panels pass calendar time as a numeric modifier instead
+            z = (keep - keep.min()) / max(float(keep.max() - keep.min()), 1.0)
+        else:
+            z = rows(np.asarray(modifier, float).ravel(), "modifier")
+
+    blocks, Ls = [], []
+    for e, comp in enumerate(components):
+        p = comp.struct.p
+        L = np.vstack([lag_matrix(xs[seg, e], p)[p_max - p:] for seg in segments])
+        Ls.append(L)
+        blocks.append(comp.design(L, z))
+    cols = []
+    if intercept:
+        cols.append(np.ones((N, 1)))
+    if covariates is not None:
+        Wc = np.asarray(covariates, float)
+        Wc = rows(Wc.reshape(Wc.shape[0], -1), "covariates")
+        cols.append(Wc)
+    W = np.hstack(cols) if cols else np.zeros((N, 0))
+    off = np.zeros(N) if offset is None else rows(np.asarray(offset, float).ravel(), "offset")
+    X = np.hstack(blocks + [W])
+    y_model = std.y(y) if family == "gaussian" else y
+    w = None if weights is None else rows(np.asarray(weights, float).ravel(), "weights")
+    if w is not None and np.any(w <= 0):
+        raise ValueError("weights must be positive")
+    stats = SuffStats.from_data(X, y_model - off, weights=w) if family == "gaussian" else None
+    data = DesignData(L=Ls[0], W=W, X=X, y=y_model, offset=off, stats=stats, Ls=Ls, z=z,
+                      weights=w, keep=keep)
+    return data, std

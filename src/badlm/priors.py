@@ -23,6 +23,16 @@ class Priors:
     * ``tau_basis`` number of B-spline functions for ``tau_model='basis'``
     * ``hs_scale`` global scale of the horseshoe alternative
     * ``coef_sd`` prior sd of unpenalised coefficients in non-Gaussian models
+    * ``temper``: the Gaussian log-likelihood is divided by this value (a power
+      likelihood). Rows of a panel that are correlated across assets or
+      heteroskedastic carry less evidence than independent Gaussian rows; a
+      ``temper`` above one lets the prior hold more sway, as in composite
+      likelihood adjustments. Note that constant observation weights cannot do
+      this because the free error variance absorbs them exactly.
+    * modifier (tensor-product) curves: the standard deviation ``1/sqrt(kappa)``
+      of coefficient differences along the modifier has a penalised-complexity
+      prior ``Exponential(mod_rate)`` with ``P(sd > mod_scale) = mod_tail_prob``,
+      so the surface shrinks towards a curve that does not vary with the modifier
     """
 
     sigma2_a: float = 0.001
@@ -34,10 +44,17 @@ class Priors:
     tau_basis: int = 6
     hs_scale: float = 1.0
     coef_sd: float = 10.0
+    mod_scale: float = 1.0
+    mod_tail_prob: float = 0.1
+    temper: float = 1.0
 
     @property
     def zeta_rate(self):
         return -np.log(self.zeta_tail_prob) / self.zeta_scale
+
+    @property
+    def mod_rate(self):
+        return -np.log(self.mod_tail_prob) / self.mod_scale
 
     @property
     def tau_level_rate(self):

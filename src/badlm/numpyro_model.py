@@ -9,7 +9,8 @@ import numpyro.distributions as dist
 from numpyro.distributions import constraints
 from numpyro.infer import MCMC, NUTS, init_to_value
 
-from .collapsed import collapsed_loglik, conditional_coefficients
+from .collapsed import (collapsed_loglik, conditional_coefficients, multi_collapsed_loglik,
+                        multi_conditional_coefficients)
 from .design import bspline_basis
 from .priors import Priors
 
@@ -22,65 +23,112 @@ def tau_basis_matrix(kt, nb, deg=3):
     return bspline_basis(np.arange(kt, dtype=float), nseg=nb - deg, deg=deg, domain=(0.0, kt - 1.0))
 
 
-def sample_level(pri: Priors):
+def as_components(structs):
+    """Normalise ``Structure`` / ``LagComponent`` / list thereof to a list of components."""
+    from .design import LagComponent, Structure
+
+    if isinstance(structs, Structure):
+        return [LagComponent(structs)]
+    if isinstance(structs, LagComponent):
+        return [structs]
+    return [LagComponent(c) if isinstance(c, Structure) else c for c in structs]
+
+
+def suffix(e):
+    """Site-name suffix of exposure ``e``: the first keeps the original names."""
+    return "" if e == 0 else f"_{e}"
+
+
+def sample_level(pri: Priors, sfx=""):
     """Level of the log precisions: a penalised-complexity prior on the implied
     standard deviation ``exp(-level / 2)`` of coefficient differences."""
-    sd = numpyro.sample("tau_level_sd", dist.Exponential(pri.tau_level_rate))
-    return numpyro.deterministic("tau_level", -2.0 * jnp.log(sd))
+    sd = numpyro.sample("tau_level_sd" + sfx, dist.Exponential(pri.tau_level_rate))
+    return numpyro.deterministic("tau_level" + sfx, -2.0 * jnp.log(sd))
 
 
-def sample_tau(kt, tau_model, pri: Priors, C=None):
+def sample_tau(kt, tau_model, pri: Priors, C=None, sfx=""):
     """Sample the log precisions ``tau`` (length ``kt``) under one of the prior
     families. Random-walk increments use a non-centred parameterisation."""
     if tau_model == "constant":
-        level = sample_level(pri)
+        level = sample_level(pri, sfx)
         tau = jnp.full((kt,), level)
     elif tau_model in ("rw", "basis"):
         n_g = kt if tau_model == "rw" else C.shape[1]
-        level = sample_level(pri)
-        zeta = numpyro.sample("zeta", dist.Exponential(pri.zeta_rate))
-        inc = numpyro.sample("tau_inc", dist.Normal(0.0, 1.0).expand([n_g - 1]))
+        level = sample_level(pri, sfx)
+        zeta = numpyro.sample("zeta" + sfx, dist.Exponential(pri.zeta_rate))
+        inc = numpyro.sample("tau_inc" + sfx, dist.Normal(0.0, 1.0).expand([n_g - 1]))
         walk = jnp.concatenate([jnp.zeros(1), jnp.cumsum(inc)])
         g = level + zeta * (walk - walk.mean())
         tau = g if tau_model == "rw" else jnp.asarray(C) @ g
     elif tau_model == "monotone":
-        level = sample_level(pri)
-        zeta = numpyro.sample("zeta", dist.Exponential(pri.zeta_rate))
-        e = numpyro.sample("tau_inc", dist.Exponential(1.0).expand([kt - 1]))
+        level = sample_level(pri, sfx)
+        zeta = numpyro.sample("zeta" + sfx, dist.Exponential(pri.zeta_rate))
+        e = numpyro.sample("tau_inc" + sfx, dist.Exponential(1.0).expand([kt - 1]))
         tau = level + jnp.concatenate([jnp.zeros(1), jnp.cumsum(zeta * e)])
     elif tau_model == "horseshoe":
-        s = numpyro.sample("hs_global", dist.HalfCauchy(pri.hs_scale))
-        psi = numpyro.sample("hs_local", dist.HalfCauchy(1.0).expand([kt]))
+        s = numpyro.sample("hs_global" + sfx, dist.HalfCauchy(pri.hs_scale))
+        psi = numpyro.sample("hs_local" + sfx, dist.HalfCauchy(1.0).expand([kt]))
         tau = -2.0 * jnp.log(psi * s)
     else:
         raise ValueError(f"tau_model must be one of {TAU_MODELS}")
-    return numpyro.deterministic("tau", tau)
+    return numpyro.deterministic("tau" + sfx, tau)
+
+
+def sample_kappa(pri: Priors, sfx=""):
+    """Precision of coefficient differences along the modifier, through a
+    penalised-complexity prior on the corresponding standard deviation."""
+    sd = numpyro.sample("mod_sd" + sfx, dist.Exponential(pri.mod_rate))
+    return numpyro.deterministic("mod_kappa" + sfx, sd ** -2)
+
+
+def _init_one(kt, tau_model, pri, C, sfx):
+    v = {}
+    level_sd = float(np.exp(-0.5 * pri.tau_level_start))
+    if tau_model == "constant":
+        v["tau_level_sd" + sfx] = level_sd
+    elif tau_model in ("rw", "basis"):
+        n_g = kt if tau_model == "rw" else C.shape[1]
+        v.update({"tau_level_sd" + sfx: level_sd, "zeta" + sfx: 0.5, "tau_inc" + sfx: np.zeros(n_g - 1)})
+    elif tau_model == "monotone":
+        v.update({"tau_level_sd" + sfx: level_sd, "zeta" + sfx: 0.5, "tau_inc" + sfx: np.full(kt - 1, 0.1)})
+    elif tau_model == "horseshoe":
+        v.update({"hs_global" + sfx: 0.05, "hs_local" + sfx: np.ones(kt)})
+    return v
 
 
 def ncp_init_values(kt, tau_model, pri: Priors, C=None, ar1=False):
     """A sensible starting point in the model's own (non-centred) sites: a
-    constant log precision at the prior mean and a small random-walk scale."""
+    constant log precision at the prior mean and a small random-walk scale.
+    ``kt`` is the number of log precisions of a single curve, or a list of
+    components."""
     v = {"sigma2": 0.5}
     if ar1:
         v["phi"] = 0.0
-    level_sd = float(np.exp(-0.5 * pri.tau_level_start))
-    if tau_model == "constant":
-        v["tau_level_sd"] = level_sd
-    elif tau_model in ("rw", "basis"):
-        n_g = kt if tau_model == "rw" else C.shape[1]
-        v.update({"tau_level_sd": level_sd, "zeta": 0.5, "tau_inc": np.zeros(n_g - 1)})
-    elif tau_model == "monotone":
-        v.update({"tau_level_sd": level_sd, "zeta": 0.5, "tau_inc": np.full(kt - 1, 0.1)})
-    elif tau_model == "horseshoe":
-        v.update({"hs_global": 0.05, "hs_local": np.ones(kt)})
+    if isinstance(kt, (int, np.integer)):
+        v.update(_init_one(int(kt), tau_model, pri, C, ""))
+        return v
+    for e, comp in enumerate(as_components(kt)):
+        v.update(_init_one(comp.n_tau, tau_model, pri, C, suffix(e)))
+        if comp.modifier is not None:
+            v["mod_sd" + suffix(e)] = 0.3
     return v
 
 
-def gaussian_model(stats, struct, q, ar1, tau_model, pri: Priors, C=None):
-    tau = sample_tau(struct.K_tau, tau_model, pri, C)
+def gaussian_model(stats, structs, q, ar1, tau_model, pri: Priors, C=None):
+    """Collapsed Gaussian model for one or several exposures (``structs`` is a
+    ``Structure`` or a list of ``LagComponent``)."""
+    comps = as_components(structs)
+    taus, kappas = [], []
+    for e, comp in enumerate(comps):
+        taus.append(sample_tau(comp.n_tau, tau_model, pri, C, suffix(e)))
+        kappas.append(sample_kappa(pri, suffix(e)) if comp.modifier is not None else None)
     sigma2 = numpyro.sample("sigma2", dist.InverseGamma(pri.sigma2_a, pri.sigma2_b))
     phi = numpyro.sample("phi", dist.Uniform(-1.0, 1.0)) if ar1 else 0.0
-    numpyro.factor("loglik", collapsed_loglik(tau, sigma2, phi, stats, struct, q, ar1))
+    if len(comps) == 1 and comps[0].modifier is None:
+        ll = collapsed_loglik(taus[0], sigma2, phi, stats, comps[0].struct, q, ar1)
+    else:
+        ll = multi_collapsed_loglik(comps, taus, kappas, sigma2, phi, stats, q, ar1)
+    numpyro.factor("loglik", ll / pri.temper)
 
 
 def count_model(L, W, y, offset, struct, family, tau_model, pri: Priors, C=None,
@@ -157,19 +205,33 @@ def run_nuts(model, model_args, *, samples=2000, warmup=1000, chains=4, seed=0,
     return draws, extra, mcmc
 
 
-def draw_gaussian_coefficients(draws, stats, struct, q, ar1, seed=0):
+def hyper_draws(draws, structs):
+    """Per-component ``tau`` and ``kappa`` arrays from a draws dictionary."""
+    comps = as_components(structs)
+    taus = [jnp.asarray(draws["tau" + suffix(e)]) for e in range(len(comps))]
+    kappas = [jnp.asarray(draws["mod_kappa" + suffix(e)]) if c.modifier is not None else None
+              for e, c in enumerate(comps)]
+    return comps, taus, kappas
+
+
+def draw_gaussian_coefficients(draws, stats, structs, q, ar1, seed=0):
     """Post-hoc draws of the coefficients and effective degrees of freedom for
-    every retained ``(tau, sigma2, phi)`` of a collapsed Gaussian fit."""
-    tau = jnp.asarray(draws["tau"])
+    every retained hyperparameter draw of a collapsed Gaussian fit."""
+    comps, taus, kappas = hyper_draws(draws, structs)
     sigma2 = jnp.asarray(draws["sigma2"])
     phi = jnp.asarray(draws["phi"]) if ar1 else jnp.zeros_like(sigma2)
     chains, n = sigma2.shape
-    dim = struct.K_r + q
+    dim = sum(c.dim for c in comps) + q
     z = jax.random.normal(jax.random.PRNGKey(seed), (chains, n, dim))
+    has_mod = [c.modifier is not None for c in comps]
+    kap_in = [k if h else jnp.zeros_like(sigma2) for k, h in zip(kappas, has_mod)]
 
-    def one(t, s2, ph, zz):
-        return conditional_coefficients(t, s2, ph, stats, struct, q, zz)
+    def one(ts, ks, s2, ph, zz):
+        ks = [k if h else None for k, h in zip(ks, has_mod)]
+        if len(comps) == 1 and not has_mod[0]:
+            return conditional_coefficients(ts[0], s2, ph, stats, comps[0].struct, q, zz)
+        return multi_conditional_coefficients(comps, ts, ks, s2, ph, stats, q, zz)
 
     f = jax.jit(jax.vmap(jax.vmap(one)))
-    theta, ed = f(tau, sigma2, phi, z)
+    theta, ed = f(taus, kap_in, sigma2, phi, z)
     return np.asarray(theta), np.asarray(ed)

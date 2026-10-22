@@ -118,6 +118,29 @@ weekly-target problem of the third batch).
   best basket result, IC 0.022 against 0.015, 0.82 gross with the full-aim
   rule and 0.74 net at 5 bp. Carried forward to the asset level.
 
+## Pillar C: volatility across assets (development period)
+
+- A lag-curve model of the log absolute return relative to each asset's slow
+  volatility level predicts it well (IC 0.25; the class-average series as a
+  spillover driver adds a little, 0.255, with a one-day spillover
+  coefficient of 0.06), but converted to a variance forecast it loses to
+  the 30-day EWMA on Patton's QLIKE loss (1.05 times the EWMA's loss for the
+  pooled curve, 1.19 for the hierarchical panel; the pooled HAR rule 1.03).
+  The log-absolute transform is the wrong target for a variance forecast:
+  mapping a log|r| prediction back to a variance needs the whole
+  distribution and the crude mean correction used here is not enough.
+- Sizing the asset-level surface strategy with the lag-curve volatility
+  instead of the EWMA changes nothing (0.80 gross / 0.76 net either way). The
+  strategy's result is not sensitive to the volatility forecast at this
+  level of accuracy, so the sizing channel of the plan is closed unless a
+  much better forecast appears. A possible follow-up is a lag curve on
+  squared returns themselves, an ARCH(infinity) with smooth weights, which
+  targets the variance directly.
+- **Asset-level correlation state** (asset's 60-day correlation with its
+  basket as a second, additive surface): 0.74 / 0.69 against 0.82 / 0.77 for
+  the own-volatility surface alone, lower in every sub-period. The
+  correlation state helped at the basket level only.
+
 ## Data notes
 
 - Lean's QQQ file is empty from 2004 to March 2011 (forward-filled zeros

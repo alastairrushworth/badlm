@@ -77,15 +77,17 @@ class PanelDesign:
 
 
 def build_panel_design(drivers, y, time, asset, nlag, k=None, end_constraint="zero", intercept=True,
-                       lag_scale="linear", standardize_drivers=True, modifier=None, modifier_k=5):
+                       lag_scale="linear", standardize_drivers=True, modifier=None, modifier_k=5,
+                       modifier_drivers=None):
     """Assemble a :class:`PanelDesign`.
 
     ``drivers`` is a list of ``R`` arrays, each aligned with ``y`` (one value
     per row of the stacked panel; a common factor is simply repeated on every
     asset's rows). Lags are formed within each asset's rows, which must be
     contiguous and time-ordered. ``nlag`` and ``k`` are scalars or one per
-    driver. ``modifier`` (aligned with ``y``) makes every driver's curve a
-    surface over lag and that state, as in :class:`badlm.BADLM`.
+    driver. ``modifier`` (aligned with ``y``) makes the curves of the drivers
+    listed in ``modifier_drivers`` (default: all) surfaces over lag and that
+    state, as in :class:`badlm.BADLM`.
     """
     from .design import build_modifier
 
@@ -97,9 +99,11 @@ def build_panel_design(drivers, y, time, asset, nlag, k=None, end_constraint="ze
     nlags = [int(nlag)] * R if np.ndim(nlag) == 0 else [int(v) for v in nlag]
     ks = [None] * R if k is None else ([int(k)] * R if np.ndim(k) == 0 else [int(v) for v in k])
     comps = []
-    for p, kk in zip(nlags, ks):
+    use_mod = range(R) if modifier_drivers is None else set(modifier_drivers)
+    for r, (p, kk) in enumerate(zip(nlags, ks)):
         kk = int(np.ceil(2.0 * (p + 1) / 3.0)) if kk is None else kk
-        comps.append(LagComponent(build_structure(p, kk, end_constraint=end_constraint, lag_scale=lag_scale), mod))
+        comps.append(LagComponent(build_structure(p, kk, end_constraint=end_constraint, lag_scale=lag_scale),
+                                  mod if r in use_mod else None))
     p_max = max(nlags)
     Z = [np.asarray(d, float).ravel() for d in drivers]
     if standardize_drivers:

@@ -456,6 +456,56 @@ ideas that did not beat it, are logged in
 `python examples/trading_summary.py` to redraw the figure from
 `paper/results/trading_*.json`.
 
+## The multivariate plan: first pass
+
+[`notes/research_plan.md`](notes/research_plan.md) sets out four ways to
+take the method beyond one series' past: a lag-curve matrix across assets,
+curves on factors, volatility across assets, and estimating the trading
+policy rather than the forecast. All four were run on a wider panel of 127
+series (US and UK stocks, index ETFs, currencies, oil, gold) with 2019
+onwards frozen as a held-out period; the development runs use 1996 to 2018,
+quarterly refits, the calibrated prior and the slow trading rule. The
+package gained what the plan needed: `badlm.panel` (shared driver lag
+curves with hierarchical asset loadings, a rank-R lag-curve matrix whose
+right factors are the driver definitions), one modifier per exposure
+(additive state surfaces), the AR(1) carry-over in prediction, and
+sub-period, log-score, blocked cross-validation and ensemble tools in
+`badlm.backtest`. The numbers below are net of five basis points.
+
+| Idea | Script | Development result | Verdict |
+|---|---|---|---|
+| Asset-level volatility surface on the wide panel | `factor_curves.py`, `leadlag_panel.py` (a) | 0.77; sub-periods 1.33, 0.50, 0.94 | survives, holds in every sub-period |
+| Curves on factor baskets, with state surfaces | `factor_curves.py` | 0.65; best variant 0.74 | fails: baskets average away the state-dependent signal |
+| Hierarchical asset loadings on the own-past curve | `leadlag_panel.py` (b) | 0.57 | fails: loadings are noise the portfolio punishes |
+| Lead-lag matrix with basket drivers, all series | `leadlag_panel.py` (c) | 1.33 with the full-aim rule | artefact: the US afternoon leaks into non-synchronous closes |
+| Lead-lag matrix, synchronous US series only | `leadlag_panel.py --universe us` | 0.22 against 0.52 for own past | fails: no daily lead-lag to trade |
+| Volatility lag curves across assets, for sizing | `volatility_panel.py` | QLIKE 1.05 times the EWMA's; sizing unchanged | fails: the EWMA is hard to beat and sizing is insensitive |
+| Mean-variance policy estimation | `policy_curves.py` | 0.81 against 0.77 | within noise |
+
+**The held-out years.** `final_holdout.py` runs the surviving signal once
+through the frozen period. It does not survive it. On the wide panel the
+net Sharpe ratio is 1.33, 0.50 and 0.94 in the three development
+sub-periods and -0.03 from 2019 to 2026 (information coefficient 0.022
+in development, 0.008 held out); on the currencies alone 1.59, 0.23, 0.76
+and then 0.07 (0.034 against 0.003). The whole-period numbers (0.56 on the
+panel, 0.82 on the currencies) are carried by the years before 2019. The
+volatility-state surface is a real feature of these markets' past, robust
+to every variant tried and to three sub-periods, and its edge is gone in
+the most recent seven years, at least in daily spot data for this
+universe. That is the honest state of the method: a sound, well-calibrated
+way to find and describe state-dependent lag structure, and no evidence of
+a durable daily-horizon edge once the years nobody tuned on are counted.
+
+The reasons behind each verdict are in
+[`notes/research_log.md`](notes/research_log.md). Two lessons stand out.
+Borrowing strength across assets worked only in the direction the first
+sessions found: one shared curve, one shared surface, every asset
+contributing evidence to it. Each way of letting assets differ, or of
+replacing them by baskets, lost to that. And the one spectacular cross-asset
+number was a data artefact of mixed closing times, which the synchronous
+universe exposed in one run; the frozen held-out period and the sub-period
+reports are what keep the surviving result honest.
+
 ## Citation
 
 ```

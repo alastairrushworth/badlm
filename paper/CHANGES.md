@@ -23,7 +23,9 @@
   4.1) and 20 replicates (Section 4.2) were used instead of 200. Models M2 and
   M4 are Bayesian implementations fitted with the same collapsed sampler;
   M5 is fitted by least squares with AIC knot selection. Table 1, Figure 1 and
-  Figure 2 are all new; the v1 numbers no longer appear.
+  Figure 2 are all new; the v1 numbers no longer appear. Squared bias is now
+  reported at the 10^6 scale (at 10^3 every entry rounded to zero), and the
+  results paragraphs of Sections 4.1 and 4.2 describe the new numbers.
 - The abstract mentions the inference scheme; the Discussion summarises it.
 
 

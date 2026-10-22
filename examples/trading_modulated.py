@@ -1,12 +1,11 @@
-"""Experiment 3: lag curves that vary with a state variable or with time.
+"""Experiment 2: a lag curve that varies with the volatility state.
 
 The curve becomes a surface over lag and a modifier ``z`` with the adaptive
 penalty along lag and a penalised-complexity prior on roughness along ``z``
-(``BADLM(modifier_k=...)``). Two modifiers are tried on the pooled panel:
-
-(a) the asset's own volatility state, log of ex-ante volatility relative to
-    its expanding median, after Nagel (2012) and Daniel and Moskowitz (2016);
-(b) calendar time, a smoothly drifting curve.
+(``BADLM(modifier_k=...)``). The modifier is the asset's own volatility
+state, the log of its ex-ante volatility relative to its expanding median,
+after Nagel (2012) and Daniel and Moskowitz (2016). The static pooled curve
+is fitted on the same rows for comparison.
 
 Run: python examples/trading_modulated.py [--universe fx] [options]
 """
@@ -63,7 +62,6 @@ if __name__ == "__main__":
     # formed from returns up to t
     med = df.groupby("asset")["vol"].transform(lambda s: s.expanding(min_periods=60).median())
     df["volstate"] = np.log(df["vol"] / med).fillna(0.0).clip(-2, 2)
-    tnorm = (df["time"] - df["time"].min()) / (df["time"].max() - df["time"].min())
     print(f"{df['asset'].nunique()} assets, {len(df)} rows", flush=True)
 
     out, results = {}, []
@@ -73,17 +71,9 @@ if __name__ == "__main__":
     res, wfv, rows = run_variant("volatility-modulated", BADLM(nlag=args.nlag, k=args.k, modifier_k=args.modifier_k, priors=pri),
                                  df, start, args.step, modifier=df["volstate"].to_numpy())
     surf = wfv.curves[-1][0]
-    grid = wfv.curves and np.linspace(-2, 2, 5)
     print("final surface at modifier grid (low to high volatility), sum over lags:",
           " ".join(f"{s.sum():+.3f}" for s in surf), "| lag 1-5 mean:", " ".join(f"{s[:5].mean():+.4f}" for s in surf))
     out["volatility"] = {"results": strip(res), "ic": ic(rows["pred"], rows["y"]), "surface": surf.tolist()}
-    results += res
-    res, wft, rows = run_variant("time-drifting", BADLM(nlag=args.nlag, k=args.k, modifier_k=args.modifier_k, priors=pri),
-                                 df, start, args.step, modifier=tnorm.to_numpy())
-    surf = wft.curves[-1][0]
-    print("final surface over time (early to late), sum over lags:", " ".join(f"{s.sum():+.3f}" for s in surf),
-          "| lag 1-5 mean:", " ".join(f"{s[:5].mean():+.4f}" for s in surf))
-    out["time"] = {"results": strip(res), "ic": ic(rows["pred"], rows["y"]), "surface": surf.tolist()}
     results += res
     print_table(results, f"{args.universe}: modulated curves, out of sample")
     os.makedirs(resdir, exist_ok=True)

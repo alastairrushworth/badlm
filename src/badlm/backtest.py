@@ -140,6 +140,12 @@ def walk_forward(model, x, y, time, *, groups=None, covariates=None, weights=Non
     refit cadence in the units of ``time``, ``window`` an optional rolling
     length. Inputs must already be on the scale the model should see
     (``standardize`` is switched off so no full-sample statistic leaks).
+
+    The predictive mean is the regression mean ``X beta``. With ``ar1=True``
+    the AR(1) model would also carry over ``phi`` times the previous residual,
+    which this function does not add, so do not use AR(1) errors for
+    prediction (with overlapping targets the regression mean alone is badly
+    wrong).
     """
     model.standardize = False
     x_arr = np.asarray(x, float)
@@ -148,8 +154,9 @@ def walk_forward(model, x, y, time, *, groups=None, covariates=None, weights=Non
     if modifier is not None and model.modifier_k is not None:
         from .design import LagComponent, build_modifier
 
-        kind = "time" if isinstance(modifier, str) else "covariate"
-        mod_basis = build_modifier(None if kind == "time" else modifier, K=model.modifier_k, kind=kind)
+        kind = modifier if isinstance(modifier, str) else "covariate"
+        src = None if kind == "time" else (x_arr[:, 0] if kind == "exposure" else modifier)
+        mod_basis = build_modifier(src, K=model.modifier_k, kind=kind)
     else:
         mod_basis = None
     from .design import LagComponent

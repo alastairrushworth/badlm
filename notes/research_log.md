@@ -49,6 +49,50 @@ of the way to the aim each day, costs proportional to notional traded.
 - **Design-effect weights** (row weight 1 / (1 + (n_t - 1) rho)): no effect,
   for the same reason constant weights have none.
 
+## Dropped, second batch (currencies, same set-up)
+
+- **Exposure-level surface** `beta(j, x_{t-j})`, the cross-basis of
+  Gasparrini et al. (`modifier='exposure'`, kept in the package and tested):
+  the response is close to linear in the size of the past move, slightly
+  larger after losses than after gains, IC 0.020 against 0.020 for the linear
+  curve, 0.68 / 0.62 net. No non-linearity in the exposure worth having.
+- **Momentum-crash state** (exposures split by the sign of the past-year
+  trend, each with the volatility surface): 0.79 / 0.73 against 0.88 / 0.78
+  for the plain volatility surface. Splitting halves the data behind each
+  surface and the sign of the trend adds nothing the state did not have.
+- **Dollar-neutral (cross-sectional) returns**, x and y demeaned across the
+  currencies each day: static 0.51 / 0.45, surface 0.48 / 0.34. The common
+  dollar component carries much of the predictability.
+- **Market-wide volatility state** (cross-sectional mean of the states):
+  0.60 / 0.53; own minus market: 0.77 / 0.70. The asset's own state is the
+  right modifier, not a global stress indicator.
+
+## Third batch: variants of the volatility surface (currencies)
+
+- **Modifier resolution and definition**: 4, 5 or 7 state splines give
+  0.71, 0.78 and 0.77 net of 5 bp; the absolute log volatility level
+  instead of the level relative to the asset's expanding median gives 0.81
+  (IC 0.029 against 0.027); a fast 5-day-over-60-day realised-volatility
+  ratio gives 0.61. The state that matters is the slow level of volatility,
+  not a recent burst. The relative definition is kept as the default because
+  it is scale-free across assets; the differences are within noise.
+- **Trading rule on the surface**: moving a twentieth of the way to the aim
+  each day (gp 0.05) is best net of costs, 0.81 at 5 bp and 0.75 at 10 bp
+  with a break-even cost of 73 bp; the full-aim rule earns 0.90 gross but only
+  0.44 net at 5 bp. A no-trade band of twice the mean aim gives 0.76 at 5 bp.
+- **Mixing with the two-horizon hand rule**: a half-and-half mix gives
+  0.79 net against 0.78 for the surface alone, so the surface subsumes it.
+- **Weekly target** (sum of the next five scaled returns): IC 0.035 on the
+  weekly target, 0.67 / 0.58, the same as the daily target after costs. With
+  `ar1=True` the walk-forward predictions came out strongly negative (IC
+  -0.045) because the AR(1) model is right and the prediction is incomplete: with
+  overlapping targets the whitened regression finds phi near one and a
+  coefficient of about -phi at lag one (the target of day t - 1 contains the
+  exposure of day t), and `predict`/`walk_forward` return only the regression
+  mean `X beta`, without the carried-over residual `phi * e_{t-1}` that the
+  AR(1) model needs for a forecast. Documented in the package; do not use
+  `ar1=True` for prediction until that term is added.
+
 ## Data notes
 
 - Lean's QQQ file is empty from 2004 to March 2011 (forward-filled zeros

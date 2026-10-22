@@ -319,10 +319,10 @@ likelihood evaluation still costs a Cholesky factorisation of a small matrix).
   along `z`, so the surface shrinks towards the ordinary curve unless the data
   ask for state dependence. The prior precision is a Kronecker sum and its
   log-determinant comes from the eigenvalues of the two factors, so the
-  sampler is unchanged. `z` can be a state variable (volatility, volume), the
-  exposure level (a Gasparrini-style non-linear exposure-lag surface) or
-  `'time'` (a smoothly drifting curve). `lag_surface(z)` summarises the
-  surface at chosen modifier values.
+  sampler is unchanged. `z` can be a state variable (volatility, volume),
+  `'exposure'` for the lagged exposure itself (the non-linear exposure-lag
+  cross-basis of Gasparrini et al., 2010) or `'time'` (a smoothly drifting
+  curve). `lag_surface(z)` summarises the surface at chosen modifier values.
 - **Observation weights.** `fit(..., weights=w)` multiplies each squared
   residual by `w`, for inverse-variance weighting of heteroskedastic series.
 - **A tempered likelihood.** `Priors(temper=T)` divides the log-likelihood by
@@ -450,7 +450,10 @@ the usual caveats: one asset class, fifteen daily-rebalanced spot series
 standing in for forwards, no carry, no slippage model beyond proportional
 costs, a shrinking signal in the last decade, and a handful of design choices
 (basis size, prior scale, temperature, trading speed) made with the same
-data. Run `python examples/trading_summary.py` to redraw the figure from
+data. Variants of the surface and of the trading rule, and a second batch of
+ideas that did not beat it, are logged in
+[`notes/research_log.md`](notes/research_log.md). Run
+`python examples/trading_summary.py` to redraw the figure from
 `paper/results/trading_*.json`.
 
 ## Citation

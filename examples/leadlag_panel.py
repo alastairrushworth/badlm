@@ -4,8 +4,8 @@ Every asset's next-day scaled return responds to a few driver series through
 shared adaptive lag curves and asset-specific loadings shrunk towards one
 (``badlm.panel``). Drivers: the asset's own past, and the past of the
 equal-risk baskets of ``factor_curves.py`` (US market, UK market, dollar,
-commodities). Each driver's curve is a surface over the asset's own
-volatility state. Three fits are compared walk-forward on the same rows:
+commodities). The own-past curve is a surface over the asset's own
+volatility state; the basket drivers have plain curves. Three fits are compared walk-forward on the same rows:
 
 (a) own past only, loadings fixed at one: the pooled single-series surface;
 (b) own past only with hierarchical loadings;
@@ -96,13 +96,13 @@ if __name__ == "__main__":
                 "loadings": dict(zip(d1.names, ld.round(3).tolist()))}
     drivers = [df["x"].to_numpy()] + [df[f"x_{b}"].to_numpy() for b in drivers_b]
     d2 = build_panel_design(drivers, y_all, t_all, a_all, nlag=250, k=args.k,
-                            modifier=df["volstate"].to_numpy(), modifier_k=5)
+                            modifier=df["volstate"].to_numpy(), modifier_k=5, modifier_drivers=[0])
     wf = panel_walk_forward(d2, start=start, step=args.step, priors=pri, loading_scale=args.loading_scale)
     res, rows = report("(c) own + basket drivers, hierarchical loadings", wf, df, close, breaks); results += res
     last = wf["refits"][-1]
     print("   loading sd per driver:", dict(zip(["own"] + drivers_b, np.round(last["loading_sd"], 3))))
     for r, name in enumerate(["own"] + drivers_b):
-        c = last["curves"][r][2]                      # surface at the middle state
+        c = last["curves"][r][2] if r == 0 else last["curves"][r]     # own: surface at the middle state
         print(f"   {name:10s} curve (mid state): lag1 {c[0]:+.4f} lag5 {c[4]:+.4f} lag21 {c[20]:+.4f} sum {c.sum():+.3f}; "
               f"loading mean {last['loading'][:, r].mean():.2f} sd {last['loading'][:, r].std():.2f}")
     out["c"] = {"results": strip(res), "ic": ic(rows["pred"], rows["y"]),

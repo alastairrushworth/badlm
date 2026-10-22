@@ -1,0 +1,53 @@
+{
+ "args": {
+  "final": false,
+  "start": 1996,
+  "step": 63
+ },
+ "qlike": {
+  "ewma30": 1.535479559740224,
+  "har": 1.5748398085007114,
+  "pooled curve": 1.6134345781354047,
+  "hierarchical panel": 1.8282255926619737,
+  "panel + class spillover": 1.8230308009804947
+ },
+ "best": "pooled curve",
+ "sizing": [
+  {
+   "signal": "surface, EWMA sizing",
+   "rule": "gp 0.05",
+   "sharpe_gross": 0.8022714890990533,
+   "turnover": 7.656371575412385,
+   "breakeven_bp": 89.36625734134361,
+   "net_0bp": 0.8022714890990533,
+   "net_1bp": 0.7932943470210292,
+   "net_2bp": 0.7843171492131782,
+   "net_5bp": 0.757385238989915,
+   "net_10bp": 0.7124977714321976
+  },
+  {
+   "signal": "surface, sized with pooled curve",
+   "rule": "gp 0.05",
+   "sharpe_gross": 0.8014226861199024,
+   "turnover": 7.764970227081657,
+   "breakeven_bp": 87.05926796852847,
+   "net_0bp": 0.8014226861199024,
+   "net_1bp": 0.7922179805157474,
+   "net_2bp": 0.7830132046945362,
+   "net_5bp": 0.7553984743107698,
+   "net_10bp": 0.7093726909044448
+  },
+  {
+   "signal": "surface, geometric mean of the two",
+   "rule": "gp 0.05",
+   "sharpe_gross": 0.8018148641178252,
+   "turnover": 7.690164144873856,
+   "breakeven_bp": 88.48052587204121,
+   "net_0bp": 0.8018148641178252,
+   "net_1bp": 0.7927532779612009,
+   "net_2bp": 0.7836916299814217,
+   "net_5bp": 0.7565063328763405,
+   "net_10bp": 0.7111964337934997
+  }
+ ]
+}

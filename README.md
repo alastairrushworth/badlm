@@ -75,14 +75,20 @@ BADLM(
     k=None,                  # B-spline functions; default ceil(2(p + 1)/3)
     tau_model="rw",          # 'rw' | 'basis' | 'monotone' | 'horseshoe' | 'constant'
     end_constraint="zero",   # 'zero' | 'zero_slope' | 'none'
+    lag_scale="linear",      # 'linear' | 'log' knot spacing in lag
     family="gaussian",       # 'gaussian' | 'poisson' | 'negbin'
     ar1=False,               # AR(1) errors (Gaussian family)
     intercept=True,
     standardize=True,        # internal standardisation; results on the original scale
     sampler="nuts",          # 'nuts' | 'gibbs' | 'laplace'
     priors=Priors(),         # hyperparameters, see badlm.priors.Priors
+    modifier_k=None,         # B-splines in a modifier variable: curve becomes a surface
 )
 ```
+
+`nlag` may also be a list, one entry per column of `x`, for several exposures
+with separate curves; `fit` takes `weights` and `modifier` (see the extensions
+section below).
 
 **Priors on the log precisions.** `'rw'` is the random walk of the paper with
 penalised-complexity (exponential) priors on its scale and on the standard
@@ -290,6 +296,186 @@ do not matter.
 Run `python examples/simulation_study.py --reps 50 --reps2 20` to reproduce
 (about six hours on four cores); results, the LaTeX table and the figures are
 written to `paper/results`, `paper/tables` and `paper/figures`.
+
+## Extensions for prediction: several exposures, modifiers, weights, tempering
+
+Version 0.3 adds four things to the Gaussian model, all of which keep the
+collapsed likelihood (the coefficients are still integrated out and each
+likelihood evaluation still costs a Cholesky factorisation of a small matrix).
+
+- **Several exposures.** `BADLM(nlag=[p1, p2, ...])` fits one adaptive lag
+  curve per column of `x`, each with its own log precisions, under a
+  block-diagonal prior. This is how interactions enter: pass `x` and
+  `x * z` as two exposures and the second curve is the lag-varying effect of
+  the modifier `z`; pass `max(x, 0)` and `min(x, 0)` for asymmetric responses;
+  pass another series for a cross-series lead-lag curve. The summaries,
+  `predict`, `plot(exposure=e)` and `lag_curve_summary(exposure=e)` all
+  understand the extra curves.
+- **A second smoothing dimension.** `BADLM(modifier_k=K)` with
+  `fit(..., modifier=z)` makes each curve a surface over lag and a modifier
+  variable, represented by a tensor product of the lag basis with `K`
+  B-splines in `z`. The adaptive first-difference penalty acts along lag; a
+  first-difference penalty with a penalised-complexity prior on its scale acts
+  along `z`, so the surface shrinks towards the ordinary curve unless the data
+  ask for state dependence. The prior precision is a Kronecker sum and its
+  log-determinant comes from the eigenvalues of the two factors, so the
+  sampler is unchanged. `z` can be a state variable (volatility, volume), the
+  exposure level (a Gasparrini-style non-linear exposure-lag surface) or
+  `'time'` (a smoothly drifting curve). `lag_surface(z)` summarises the
+  surface at chosen modifier values.
+- **Observation weights.** `fit(..., weights=w)` multiplies each squared
+  residual by `w`, for inverse-variance weighting of heteroskedastic series.
+- **A tempered likelihood.** `Priors(temper=T)` divides the log-likelihood by
+  `T`. Rows of a panel that are correlated across series, or heteroskedastic,
+  carry less evidence than independent Gaussian rows, and the trading
+  experiments below show that without this correction the marginal likelihood
+  happily spends thirty-odd effective degrees of freedom on wiggles that do
+  not survive out of sample. Constant weights cannot do this, because the free
+  error variance absorbs them exactly.
+- **Log-spaced knots.** `BADLM(lag_scale='log')` places the knots in
+  `log(1 + lag)`, which is useful when the curve is expected to change quickly
+  at short lags and slowly at long ones.
+
+`badlm.backtest` adds a walk-forward evaluation loop. `FastFitter` compiles
+the collapsed posterior once and finds its mode for any window's sufficient
+statistics (an L-BFGS run warm-started at the previous window's mode, well
+under a second per refit), `walk_forward` refits on an expanding window at a
+chosen cadence and returns the out-of-sample predictive mean and variance of
+every row, `trade` turns predictions into risk-scaled positions traded fully,
+slowly towards the aim (Garleanu and Pedersen, 2013) or with a no-trade band,
+`performance` reports gross and net Sharpe ratios, turnover and the
+break-even cost, and `deflated_sharpe` adjusts for the number of rules tried.
+
+## Trading experiments
+
+The scripts `examples/trading_*.py` ask whether an adaptive lag curve can be
+turned into a trading signal that survives costs, using daily data that are
+free to download: eleven US equities and ETFs 1998 to 2021 (QuantConnect Lean
+sample data, split- and dividend-adjusted), eighteen floating exchange rates
+against the dollar 1990 to 2026 (Federal Reserve H.10), spot WTI and Brent, and
+gold (`examples/_markets.py` documents the sources and the cleaning). Returns
+are divided by an ex-ante volatility (a 30-day half-life EWMA lagged a day)
+and winsorised at five standard deviations; the response is the next day's
+scaled return and the exposure is the scaled return itself, so the lag curve
+is the whole linear return-on-past-returns relation at a daily resolution.
+Everything reported is out of sample: the curve is re-estimated every 63
+trading days on an expanding window starting in 1996, and each day's
+prediction uses only earlier data. Positions are the predictive mean divided
+by the predictive variance and by volatility, so that every asset carries the
+same ex-ante risk, and are either set to that aim each day or moved a tenth of
+the way towards it ("slow", the Garleanu-Pedersen rule). Costs are
+proportional to notional traded; one to two basis points is realistic for
+major currency forwards and futures, five for the rest. Sharpe ratios are
+annualised and the comparison rules use the same rows, the same
+volatility scaling and the same trading rules: time-series momentum
+(Moskowitz, Ooi and Pedersen, 2012) as the sign or the mean of the past 252
+days, and a two-horizon rule, the sum of the past 21 days plus the sum of the
+past 252 days.
+
+**Calibrating the evidence.** The first lesson came from the calibration runs
+(`--k`, `--scale`, `--temper`): with 84 basis functions and the default priors
+the final curve had an in-sample information coefficient of 0.050 and an
+out-of-sample one of 0.014, and used about 38 effective degrees of freedom.
+Daily returns are far from independent Gaussian rows (the currencies have an
+average pairwise correlation of 0.37), the penalised-complexity priors are
+uninformative at the scale of return predictability (coefficients of a few
+thousandths), and the marginal likelihood therefore pays for wiggles that do
+not persist. A prior scale matched to that size (`tau_level_scale=0.001`) and
+a tempered likelihood (`temper=10`) bring the in-sample coefficient down to
+0.028 and the out-of-sample one up to 0.019, the same as a deliberately coarse
+basis of ten functions. All experiments below use 25 basis functions over 250
+lags with that prior and temperature.
+
+**1. One pooled curve across assets** (`trading_pooled.py`). The currency
+curve is a plateau of about 0.004 (scaled return per scaled return) over
+lags one to thirty, decaying to zero by about lag 100, with a small bump at
+six to nine months: momentum at every horizon up to a quarter, strongest in
+the first month, and no reversal at any lag (figure, panel a). Its level has
+fallen over time, from 0.006 in the fits of the late 1990s to 0.0035 now.
+
+| Currencies, 1996-2026, slow trading | IC | Gross SR | Net SR, 2 bp | Net SR, 5 bp | Turnover/yr |
+|---|---|---|---|---|---|
+| badlm pooled curve | 0.020 | 0.70 | 0.67 | 0.64 | 8 |
+| time-series momentum, sign of past year | 0.021 | 0.57 | 0.55 | 0.51 | 5 |
+| time-series momentum, mean of past year | 0.021 | 0.71 | 0.69 | 0.67 | 5 |
+| past month plus past year | 0.027 | 0.81 | 0.78 | 0.72 | 11 |
+| five-day reversal | 0.011 | -0.62 | -0.77 | -0.99 | 45 |
+
+The curve is a profitable signal net of realistic currency costs, with a
+deflated Sharpe probability of 0.94 against the three trading rules tried,
+but it only matches the one-parameter momentum rule and does not reach the
+two-horizon rule. Pooling the equities and commodities in (`--universe all`)
+lowers the numbers to 0.66 gross and 0.61 net, and the curve has little to
+say about eleven US stocks and ETFs (0.32) or two oil series and gold (0.15),
+where momentum rules are equally weak. Profitability is concentrated in time:
+the mean yearly net Sharpe ratio is 1.3 for 1996 to 2005, 0.2 for 2006 to
+2015 and -0.5 for 2016 to 2026, the well-documented fading of currency trend
+following.
+
+![pooled currency curve](figures/trading_pooled_fx.png)
+
+**2. Several exposures** (`trading_interactions.py`). Splitting the exposure
+into gains and losses gives two curves: losses are followed by continued
+losses with a short-lag coefficient of 0.005, gains by a coefficient of only
+0.001, and the asymmetric model edges the pooled curve (information
+coefficient 0.0212 against 0.0204, net Sharpe 0.66 against 0.64 at five basis
+points), within noise. For the equities, where volume is available, an
+exposure `return x relative volume` (log volume over its trailing 60-day
+mean) adds nothing: the volume curve is indistinguishable from zero and the
+information coefficient stays slightly negative, so the volume-return
+interaction of Llorente et al. (2002) does not show up in these eleven
+series at a daily horizon.
+
+**3. A second smoothing dimension** (`trading_modulated.py`). Letting the
+curve vary with the asset's own volatility state (log of ex-ante volatility
+relative to its expanding median, five B-splines, roughness along the state
+shrunk by a penalised-complexity prior) is the extension that works. The
+surface in panel (a) of the figure below says that in quiet markets a move is
+followed by strong continuation at lags one to ten, while after a volatile
+period the first week reverses and only the second and third weeks continue;
+the static curve is the average of the two and does neither well. Out of
+sample the information coefficient rises from 0.020 to 0.027 and the slow
+rule earns a gross Sharpe ratio of 0.88 and 0.78 net of five basis points,
+above the two-horizon rule (0.81 and 0.72) and the static curve (0.70 and
+0.64); on all 32 series the numbers are 0.84 gross and 0.77 net against 0.66
+and 0.61 for the static curve. A curve drifting with calendar time (panel c)
+tracks the fading of the plateau but does not help prediction (0.68 gross,
+0.63 net): the drift is only known after the fact.
+
+![surface, Sharpe ratios and drift](figures/trading_summary.png)
+
+**4. A latent regime** (`trading_regimes.py`). The last idea was a hidden
+Markov switch in the amplitude of the pooled curve, the state shared by all
+assets on a day and re-estimated yearly by EM on the out-of-sample
+predictions available at the time, with the filtered state scaling the
+position. It does not work, and the way it fails is instructive. With a mild
+prior on persistence the two states flip almost daily (stay probabilities of
+about 0.6), the amplitudes drift to about -7 and +8, and the filtered
+amplitude is a noisy day-by-day verdict on whether the signal worked
+yesterday: the information coefficient falls (0.015 against 0.016 for the
+static curve over 1999 to 2026) and turnover rises to about 270 a year, so the
+rule loses money after costs. Forcing persistence with a much stronger prior
+(`--sticky 5000`) gives stay probabilities above 0.9 but the amplitudes still
+drift to extremes and the out-of-sample coefficient is lower still (0.012).
+The attenuation of momentum over these decades is real, as the time-drifting
+surface shows, but it is gradual and only identifiable in hindsight, whereas
+the volatility state is observed and moves the curve today. Observed-state
+modulation beats latent regimes here.
+
+**What to take from this.** Three things made the difference between the
+earlier unprofitable attempts and these results: evaluating out of sample
+with a cost model and a slow trading rule derived from the curve's own
+persistence; calibrating the evidence of a dependent, heavy-tailed panel so
+that the adaptive smoother does not overfit; and giving the curve a second
+dimension along the volatility state. The pooled curve on its own
+rediscovers time-series momentum and nothing more, which is reassuring but
+not an edge. The volatility-dependent surface is an edge in this data, with
+the usual caveats: one asset class, fifteen daily-rebalanced spot series
+standing in for forwards, no carry, no slippage model beyond proportional
+costs, a shrinking signal in the last decade, and a handful of design choices
+(basis size, prior scale, temperature, trading speed) made with the same
+data. Run `python examples/trading_summary.py` to redraw the figure from
+`paper/results/trading_*.json`.
 
 ## Citation
 

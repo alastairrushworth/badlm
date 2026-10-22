@@ -31,4 +31,4 @@ __all__ = [
     "paper_lag_curves",
     "readme_lag_curve",
 ]
-__version__ = "0.2.0"
+__version__ = "0.3.0"

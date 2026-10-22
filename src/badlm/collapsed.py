@@ -14,10 +14,20 @@ the chain penalty has the closed form ``log K + sum(tau)``.
 """
 from __future__ import annotations
 
+import jax
 import jax.numpy as jnp
-from jax.scipy.linalg import cho_solve
+from jax.scipy.linalg import block_diag, cho_solve
 
+from .design import SuffStats
 from .priors import TAU_CAP
+
+# Sufficient statistics travel through ``jax.jit`` as a pytree, so that one
+# compiled posterior serves every window of a walk-forward fit.
+jax.tree_util.register_pytree_node(
+    SuffStats,
+    lambda s: ((s.S_a, s.S_b, s.S_c, s.s_a, s.s_b, s.s_c, s.yy_a, s.yy_b, s.yy_c, s.N), None),
+    lambda aux, ch: SuffStats(*ch),
+)
 
 
 def suff_at(stats, phi):
@@ -98,3 +108,53 @@ def conditional_coefficients(tau, sigma2, phi, stats, struct, q, z):
     """Draw ``theta | tau, sigma2, phi, y`` for the adaptive model."""
     Q_r, _ = adaptive_precision(tau, struct)
     return conditional_coefficients_Q(Q_r, sigma2, phi, stats, q, z)
+
+
+# ----------------------------------------------------------------------------
+# Multi-exposure and tensor-product prior precisions
+# ----------------------------------------------------------------------------
+def component_precision(comp, tau, kappa=None):
+    """Prior precision and generalised log-determinant of one lag component.
+
+    Without a modifier this is :func:`adaptive_precision`. With one, the
+    precision is the Kronecker sum ``Q_lag (x) I + kappa I (x) P_z`` whose
+    eigenvalues are all sums ``a_i + kappa mu_j`` of the factors' eigenvalues;
+    zero eigenvalues (an unconstrained curve that is constant in ``z``) are
+    excluded from the generalised determinant.
+    """
+    Q_lag, logdet_lag = adaptive_precision(tau, comp.struct)
+    if comp.modifier is None:
+        return Q_lag, logdet_lag
+    Kz, Kr = comp.K_z, comp.struct.K_r
+    P = jnp.asarray(comp.modifier.P)
+    mu = jnp.asarray(comp.modifier.mu)
+    Q = jnp.kron(Q_lag, jnp.eye(Kz)) + kappa * jnp.kron(jnp.eye(Kr), P)
+    a = jnp.linalg.eigvalsh(Q_lag)
+    lam = a[:, None] + kappa * mu[None, :]
+    pos = lam > 1e-10
+    logdet = jnp.sum(jnp.where(pos, jnp.log(jnp.where(pos, lam, 1.0)), 0.0))
+    return Q, logdet
+
+
+def multi_precision(components, taus, kappas=None):
+    """Block-diagonal prior precision over several components and the sum of
+    their generalised log-determinants."""
+    if kappas is None:
+        kappas = [None] * len(components)
+    Qs, logdet = [], 0.0
+    for comp, tau, kap in zip(components, taus, kappas):
+        Q, ld = component_precision(comp, tau, kap)
+        Qs.append(Q)
+        logdet = logdet + ld
+    Q = Qs[0] if len(Qs) == 1 else block_diag(*Qs)
+    return Q, logdet
+
+
+def multi_collapsed_loglik(components, taus, kappas, sigma2, phi, stats, q, ar1=False):
+    Q, logdet = multi_precision(components, taus, kappas)
+    return collapsed_loglik_Q(Q, logdet, sigma2, phi, stats, q, ar1)
+
+
+def multi_conditional_coefficients(components, taus, kappas, sigma2, phi, stats, q, z):
+    Q, _ = multi_precision(components, taus, kappas)
+    return conditional_coefficients_Q(Q, sigma2, phi, stats, q, z)

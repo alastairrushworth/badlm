@@ -63,11 +63,13 @@ if __name__ == "__main__":
     if not args.final:
         close = close.loc[:HOLDOUT_START - pd.Timedelta(days=1)]
     memb = baskets(close, kind)
-    drivers_b = ["us_market", "uk_market", "dollar", "commodity"]
+    drivers_b = ["us_market", "dollar", "commodity"] if args.universe == "us" else ["us_market", "uk_market", "dollar", "commodity"]
     bret = pd.DataFrame({k: basket_returns(close, memb[k]) for k in drivers_b})
     bvol = ewma_vol(bret)
     bscaled = (bret / bvol).clip(-5, 5).fillna(0.0)
-    use = {"equity": ("equity_us", "equity_uk", "index"), "fx": ("fx",),
+    # 'us' keeps only series that close at 4 pm New York, so that a lagged driver is known before the
+    # position is set and the next-day return starts after it
+    use = {"equity": ("equity_us", "equity_uk", "index"), "fx": ("fx",), "us": ("equity_us", "index"),
            "all": ("equity_us", "equity_uk", "index", "fx", "commodity")}[args.universe]
     df = stacked_rows(close, kinds=kind, use=use)
     med = df.groupby("asset")["vol"].transform(lambda s: s.expanding(min_periods=60).median())

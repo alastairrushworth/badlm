@@ -337,7 +337,7 @@ class ModifierBasis:
     K: int
     deg: int
     domain: tuple
-    kind: str                    # 'covariate' or 'time'
+    kind: str                    # 'covariate', 'time' or 'exposure'
     P: np.ndarray                # (K, K) first-difference penalty
     mu: np.ndarray               # eigenvalues of P (ascending; mu[0] == 0)
     V: np.ndarray                # eigenvectors of P
@@ -352,7 +352,10 @@ class ModifierBasis:
 
 def build_modifier(z, K=6, deg=3, kind="covariate", domain=None, trim=0.01):
     """Modifier basis with the domain taken from the central ``1 - 2 trim`` of
-    the training values (``kind='covariate'``) or ``[0, 1]`` (``kind='time'``)."""
+    the training values (``kind='covariate'`` or ``'exposure'``) or ``[0, 1]``
+    (``kind='time'``). With ``kind='exposure'`` the modifier of lag ``j`` is the
+    lagged exposure itself, so the surface ``beta(j, x)`` is a non-linear
+    exposure-lag response (the cross-basis of Gasparrini et al., 2010)."""
     if K < deg + 1:
         raise ValueError(f"modifier K must be at least {deg + 1}")
     if domain is None:
@@ -400,10 +403,18 @@ class LagComponent:
 
     def design(self, L, z=None):
         """Design block for lag matrix ``L`` (standardised exposure) and modifier
-        values ``z`` (one per row of ``L``)."""
-        LB = L @ self.struct.B_r
+        values ``z`` (one per row of ``L``). For an exposure modifier the block
+        is ``sum_j x_{t-j} B(j) (x) C(x_{t-j})``."""
         if self.modifier is None:
-            return LB
+            return L @ self.struct.B_r
+        if self.modifier.kind == "exposure":
+            B_r = self.struct.B_r
+            out = np.zeros((L.shape[0], self.dim))
+            for j in range(L.shape[1]):
+                Cj = self.modifier.basis(L[:, j])                       # (N, K_z)
+                out += ((L[:, j, None] * B_r[j][None, :])[:, :, None] * Cj[:, None, :]).reshape(L.shape[0], -1)
+            return out
+        LB = L @ self.struct.B_r
         Cz = self.modifier.basis(z)
         return (LB[:, :, None] * Cz[:, None, :]).reshape(L.shape[0], -1)
 
@@ -485,7 +496,7 @@ def build_multi_design(X_exp, y, components, covariates=None, intercept=True, of
     xs = std.x(X_exp)
 
     z = None
-    if any(c.modifier is not None for c in components):
+    if any(c.modifier is not None and c.modifier.kind != "exposure" for c in components):
         if modifier is None:
             raise ValueError("this model has a modifier; pass modifier= to fit")
         if isinstance(modifier, str) and modifier == "time":

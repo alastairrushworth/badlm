@@ -110,3 +110,20 @@ def test_walk_forward_predictions_are_out_of_sample(two_exposure_data):
     tr = trade(wf.mean, wf.var, np.zeros(wf.mean.size), wf.time, rule="gp", speed=0.5)
     perf = performance(tr["position"], tr["trade"], wf.y, wf.time, costs=(0.0, 0.01))
     assert perf["sharpe_gross"] > 0 and perf["sharpe_net"][0.01] < perf["sharpe_gross"]
+
+
+def test_exposure_surface_recovers_nonlinear_response():
+    rng = np.random.default_rng(5)
+    n, lag = 4000, np.arange(21.0)
+    x = rng.normal(size=n)
+    b = 0.5 * np.exp(-lag / 4.0)
+    b[-1] = 0.0
+    L = lag_matrix(x, 20)
+    mu = (L * (1 - 0.3 * L**2)) @ b                      # large moves respond less
+    y = mu + rng.normal(size=mu.size)
+    m = BADLM(nlag=20, k=12, modifier_k=5, sampler="laplace").fit(x, y, modifier="exposure", samples=100, chains=1)
+    s = m.lag_surface([-1.0, 0.0, 1.0])
+    for i, xv in enumerate(s["z"]):
+        assert abs(s["median"][i, 0] - b[0] * (1 - 0.3 * xv**2)) < 0.1
+    pr = m.predict(x[-300:])
+    assert np.corrcoef(pr["mean"], mu[-280:])[0, 1] > 0.9

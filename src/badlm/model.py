@@ -84,8 +84,9 @@ class BADLM:
         ``modifier_k`` B-splines in ``z``, with the adaptive penalty along lag
         and a penalised-complexity prior on roughness along ``z`` that shrinks
         towards a curve that does not depend on ``z``. The modifier can be a
-        state variable (volatility, volume), the exposure level, or
-        ``'time'`` for a smoothly drifting curve. Gaussian family only.
+        state variable (volatility, volume), ``'exposure'`` for the lagged
+        exposure itself (a non-linear exposure-lag surface), or ``'time'`` for
+        a smoothly drifting curve. Gaussian family only.
     """
 
     nlag: int | tuple | list
@@ -174,8 +175,12 @@ class BADLM:
         if self.modifier_k is not None:
             if modifier is None:
                 raise ValueError("modifier_k is set; pass modifier= (a series or 'time') to fit")
-            kind = "time" if isinstance(modifier, str) else "covariate"
-            mod_basis = build_modifier(None if kind == "time" else modifier, K=self.modifier_k, kind=kind)
+            if isinstance(modifier, str) and modifier not in ("time", "exposure"):
+                raise ValueError("modifier must be a series, 'time' or 'exposure'")
+            kind = modifier if isinstance(modifier, str) else "covariate"
+            z_for_domain = (x_arr - x_arr.mean(axis=0)) / np.where(x_arr.std(axis=0, ddof=1) > 0, x_arr.std(axis=0, ddof=1), 1.0) \
+                if (kind == "exposure" and self.standardize) else (x_arr if kind == "exposure" else modifier)
+            mod_basis = build_modifier(None if kind == "time" else z_for_domain, K=self.modifier_k, kind=kind)
         self.components_ = [LagComponent(st, mod_basis) for st in self.structs_]
         data, std = build_multi_design(x_arr, y, self.components_, covariates=covariates,
                                        intercept=self.intercept, offset=offset,
@@ -185,7 +190,13 @@ class BADLM:
         self.std_: Standardizer = std
         self.modifier_ = mod_basis
         # average modifier basis over the training rows: the curve 'at the average state'
-        self.mod_weights_ = None if mod_basis is None else mod_basis.basis(data.z).mean(axis=0)
+        # (for an exposure modifier, over the exposure values)
+        if mod_basis is None:
+            self.mod_weights_ = None
+        elif mod_basis.kind == "exposure":
+            self.mod_weights_ = mod_basis.basis(data.Ls[0].ravel()).mean(axis=0)
+        else:
+            self.mod_weights_ = mod_basis.basis(data.z).mean(axis=0)
         self.C_ = tau_basis_matrix(self.struct.K_tau, self.priors.tau_basis) if self.tau_model == "basis" else None
         self.fit_info_ = {"sampler": self.sampler, "samples": samples, "warmup": warmup, "chains": chains}
         self._nuts_opts = {"dense_mass": dense_mass, "max_tree_depth": max_tree_depth}
@@ -419,7 +430,9 @@ class BADLM:
 
         Returns a dict with ``mean``, ``lower``, ``upper`` and ``draws`` (shape
         ``(n_draws, len(x_new) - nlag_max)``). ``kind='response'`` adds
-        observation noise; ``kind='mean'`` returns the expected response. For a
+        observation noise; ``kind='mean'`` returns the expected response, the
+        regression mean only (an AR(1) error model would add ``phi`` times
+        the previous residual, which is not included). For a
         modifier model pass ``modifier`` (same length as ``x_new``, or the
         retained length); ``'time'`` uses the end of the training period.
         """
@@ -431,7 +444,7 @@ class BADLM:
         p_max = self.nlag_max
         n = x_new.shape[0] - p_max
         z = None
-        if self.modifier_ is not None:
+        if self.modifier_ is not None and self.modifier_.kind != "exposure":
             if modifier is None or (isinstance(modifier, str) and modifier == "time"):
                 z = np.full(n, self.modifier_.domain[1])
             else:

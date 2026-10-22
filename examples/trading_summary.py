@@ -1,6 +1,6 @@
 """Figure summarising the trading experiments from the saved JSON results:
-the volatility-dependent lag surface, the net Sharpe ratio of each signal and
-the pooled curve's drift. Run after the trading_*.py scripts."""
+the volatility-dependent lag surface and the Sharpe ratio of each signal.
+Run after trading_pooled.py and trading_modulated.py."""
 import json
 import os
 
@@ -21,10 +21,8 @@ def load(name):
 
 mod = load("trading_modulated_fx.json")
 pooled = load("trading_pooled_fx.json")
-inter = load("trading_interactions_fx.json")
-reg = None   # the regime run covers 1999-2026, not the 1996-2026 of the other rows; see the README
 
-fig, axes = plt.subplots(1, 3, figsize=(16, 4.8))
+fig, axes = plt.subplots(1, 2, figsize=(12, 4.8))
 ax = axes[0]
 surf = np.array(mod["volatility"]["surface"])
 lags = np.arange(1, surf.shape[1] + 1)
@@ -44,12 +42,7 @@ rows = []
 for r in pooled["results"]:
     if r["signal"] in ("badlm curve", "TSMOM linear(252d)", "sum21 + sum252") and r["rule"] == "gp 0.1":
         rows.append((r["signal"] if r["signal"] != "badlm curve" else "static curve", r))
-for key, name in (("asymmetric", "gains + losses"),):
-    rows.append((name, [r for r in inter[key]["results"] if r["rule"] == "gp 0.1"][0]))
-for key, name in (("time", "time-drifting"), ("volatility", "volatility-modulated")):
-    rows.append((name, [r for r in mod[key]["results"] if r["rule"] == "gp 0.1"][0]))
-if reg is not None:
-    rows.append(("regime-scaled", [r for r in reg["results"] if r["signal"].startswith("regime") and r["rule"] == "gp 0.1"][0]))
+rows.append(("volatility-modulated", [r for r in mod["volatility"]["results"] if r["rule"] == "gp 0.1"][0]))
 names = [n for n, _ in rows]
 y = np.arange(len(rows))
 for j, (cost, col) in enumerate(((0.0, "C0"), (0.0005, "C1"))):
@@ -63,15 +56,6 @@ ax.set_xlabel("annualised Sharpe ratio, 1996-2026, slow trading (gp 0.1)")
 ax.set_title("(b) currencies: out-of-sample Sharpe ratio by signal")
 ax.legend(frameon=False, fontsize=8, loc="lower right")
 
-ax = axes[2]
-ts = np.array(mod["time"]["surface"])
-for i, s in enumerate(ts):
-    ax.plot(lags, s, color=plt.cm.viridis(i / 4), lw=1.4, label=["1990", "1999", "2008", "2017", "2026"][i])
-ax.axhline(0, color="grey", lw=0.5)
-ax.set_xscale("log")
-ax.set_xlabel("lag in days (log scale)")
-ax.set_title("(c) the curve drifting over time (final refit)")
-ax.legend(frameon=False, fontsize=8, title="approx. year")
 fig.tight_layout()
 os.makedirs(figdir, exist_ok=True)
 fig.savefig(os.path.join(figdir, "trading_summary.png"), dpi=130)

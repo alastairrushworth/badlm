@@ -414,19 +414,7 @@ following.
 
 ![pooled currency curve](figures/trading_pooled_fx.png)
 
-**2. Several exposures** (`trading_interactions.py`). Splitting the exposure
-into gains and losses gives two curves: losses are followed by continued
-losses with a short-lag coefficient of 0.005, gains by a coefficient of only
-0.001, and the asymmetric model edges the pooled curve (information
-coefficient 0.0212 against 0.0204, net Sharpe 0.66 against 0.64 at five basis
-points), within noise. For the equities, where volume is available, an
-exposure `return x relative volume` (log volume over its trailing 60-day
-mean) adds nothing: the volume curve is indistinguishable from zero and the
-information coefficient stays slightly negative, so the volume-return
-interaction of Llorente et al. (2002) does not show up in these eleven
-series at a daily horizon.
-
-**3. A second smoothing dimension** (`trading_modulated.py`). Letting the
+**2. A second smoothing dimension** (`trading_modulated.py`). Letting the
 curve vary with the asset's own volatility state (log of ex-ante volatility
 relative to its expanding median, five B-splines, roughness along the state
 shrunk by a penalised-complexity prior) is the extension that works. The
@@ -438,36 +426,24 @@ sample the information coefficient rises from 0.020 to 0.027 and the slow
 rule earns a gross Sharpe ratio of 0.88 and 0.78 net of five basis points,
 above the two-horizon rule (0.81 and 0.72) and the static curve (0.70 and
 0.64); on all 32 series the numbers are 0.84 gross and 0.77 net against 0.66
-and 0.61 for the static curve. A curve drifting with calendar time (panel c)
-tracks the fading of the plateau but does not help prediction (0.68 gross,
-0.63 net): the drift is only known after the fact.
+and 0.61 for the static curve.
 
-![surface, Sharpe ratios and drift](figures/trading_summary.png)
+![surface and Sharpe ratios](figures/trading_summary.png)
 
-**4. A latent regime** (`trading_regimes.py`). The last idea was a hidden
-Markov switch in the amplitude of the pooled curve, the state shared by all
-assets on a day and re-estimated yearly by EM on the out-of-sample
-predictions available at the time, with the filtered state scaling the
-position. It does not work, and the way it fails is instructive. With a mild
-prior on persistence the two states flip almost daily (stay probabilities of
-about 0.6), the amplitudes drift to about -7 and +8, and the filtered
-amplitude is a noisy day-by-day verdict on whether the signal worked
-yesterday: the information coefficient falls (0.015 against 0.016 for the
-static curve over 1999 to 2026) and turnover rises to about 270 a year, so the
-rule loses money after costs. Forcing persistence with a much stronger prior
-(`--sticky 5000`) gives stay probabilities above 0.9 but the amplitudes still
-drift to extremes and the out-of-sample coefficient is lower still (0.012).
-The attenuation of momentum over these decades is real, as the time-drifting
-surface shows, but it is gradual and only identifiable in hindsight, whereas
-the volatility state is observed and moves the curve today. Observed-state
-modulation beats latent regimes here.
+**What else was tried.** Gains and losses as separate exposures (losses
+continue, gains barely do, no out-of-sample edge), a return-times-volume
+exposure for the equities (nothing), a curve drifting with calendar time
+(tracks the fading of the plateau but the drift is only known afterwards),
+and a two-state hidden Markov regime on the amplitude of the signal (the
+states flip almost daily and the rule loses after costs). The reasons and
+numbers are in [`notes/research_log.md`](notes/research_log.md); the code was
+not kept.
 
 **What to take from this.** Three things made the difference between the
 earlier unprofitable attempts and these results: evaluating out of sample
-with a cost model and a slow trading rule derived from the curve's own
-persistence; calibrating the evidence of a dependent, heavy-tailed panel so
-that the adaptive smoother does not overfit; and giving the curve a second
-dimension along the volatility state. The pooled curve on its own
+with a cost model and a slow trading rule; calibrating the evidence of a
+dependent, heavy-tailed panel so that the adaptive smoother does not overfit;
+and giving the curve a second dimension along the volatility state. The pooled curve on its own
 rediscovers time-series momentum and nothing more, which is reassuring but
 not an edge. The volatility-dependent surface is an edge in this data, with
 the usual caveats: one asset class, fifteen daily-rebalanced spot series

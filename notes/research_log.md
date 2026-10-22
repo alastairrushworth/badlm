@@ -141,6 +141,36 @@ weekly-target problem of the third batch).
   the own-volatility surface alone, lower in every sub-period. The
   correlation state helped at the basket level only.
 
+## Pillar D: policy estimation (development period)
+
+- The mean-variance policy with the adaptive-smooth curve and the
+  volatility surface, estimated as the regression of ones on the daily
+  profit rows (Britten-Jones) plus quadratic cost rows, gives 0.92 gross /
+  0.81 net of 5 bp with the slow rule against 0.82 / 0.77 for the forecast
+  rule on identical rows, and 0.86 / 0.39 against 0.97 / 0.64 with the
+  full-aim rule; sub-period net Sharpe 1.19, 0.48, 0.82 against 1.34, 0.50,
+  0.94. Within noise, and not better in any sub-period: the portfolio
+  objective does not find anything the forecast rule misses on this
+  universe. The quadratic cost term barely changes the curve. Kept as a
+  script because the construction is cheap and general; not a result.
+
+## Pillar A: the lead-lag panel (development period)
+
+- Own past with hierarchical loadings (loadings shrunk towards one, PC
+  scale 0.5): IC rises from 0.021 to 0.026 but the slow rule falls from
+  0.80 / 0.76 to 0.61 / 0.57. The estimated spread of loadings is large
+  (sd 0.5, range -0.2 to 3.0) and mostly noise that the pooled IC rewards
+  and the portfolio punishes. Stronger shrinkage to be tried.
+- Own past plus the US market, UK market, dollar and commodity baskets as
+  drivers, all 120 series: IC 0.062, full-aim rule 1.79 gross / 1.33 net of
+  5 bp, slow rule 0.19. The signal is yesterday's US market return at lag
+  one (coefficient +0.125) feeding every series. Most of this is the
+  time-zone artefact: UK stocks close before the US afternoon and the
+  currencies are noon fixings, so their next close-to-close return contains
+  the US move that the backtest treats as a lagged, tradable signal. A
+  synchronous US-only run separates the artefact from any real large-to-
+  small lead-lag.
+
 ## Data notes
 
 - Lean's QQQ file is empty from 2004 to March 2011 (forward-filled zeros

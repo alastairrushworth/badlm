@@ -93,6 +93,31 @@ of the way to the aim each day, costs proportional to notional traded.
   AR(1) model needs for a forecast. Documented in the package; do not use
   `ar1=True` for prediction until that term is added.
 
+## Plan, step 1 and pillar B (wide panel, development period 1996-2018)
+
+The panel now has 127 series (32 US stocks and ETFs from 1990, 64 FTSE 100
+stocks from 2000, 18 currencies, oil, gold, factor ETFs); 2019 onwards is
+held out and untouched. Evaluation adds sub-period Sharpe ratios (1996-2003,
+2004-2011, 2012-2018), blocked cross-validation with an embargo, ensembles,
+the log score, and the AR(1) carry-over in prediction (which fixes the
+weekly-target problem of the third batch).
+
+- **Asset-level volatility surface on the wide panel**: slow rule 0.82 gross
+  / 0.77 net of 5 bp; sub-period net Sharpe 1.33, 0.50, 0.94. The result of
+  the first sessions generalises to stocks and holds in every sub-period.
+- **Factor baskets** (US market, UK market, dollar, commodities, index ETFs,
+  five US sectors; equal-risk means of members): one pooled curve on the
+  baskets' own past gives 0.66 / 0.65 with a turnover of two a year, the
+  volatility surface on baskets 0.59 / 0.57, and the US market's past as a
+  second driver adds nothing (its curve is slightly negative). Factor-level
+  prediction does not beat trading the members individually (0.77), so
+  pillar B fails its kill criterion: baskets average away the
+  state-dependent part of the signal that the asset-level surface uses.
+- **Additive state surfaces** (own volatility plus the basket's average
+  pairwise correlation, one modifier per exposure, new in the package): the
+  best basket result, IC 0.022 against 0.015, 0.82 gross with the full-aim
+  rule and 0.74 net at 5 bp. Carried forward to the asset level.
+
 ## Data notes
 
 - Lean's QQQ file is empty from 2004 to March 2011 (forward-filled zeros

@@ -1,0 +1,323 @@
+{
+ "args": {
+  "final": false,
+  "start": 1996,
+  "step": 63,
+  "k": 25
+ },
+ "baskets": {
+  "us_market": [
+   "AAPL",
+   "AMD",
+   "BAC",
+   "BBY",
+   "CVX",
+   "GE",
+   "HD",
+   "JNJ",
+   "JPM",
+   "KO",
+   "LLY",
+   "MRK",
+   "MSFT",
+   "PEP",
+   "PFE",
+   "PG",
+   "UNH",
+   "WMT",
+   "XOM",
+   "GOOG",
+   "FB",
+   "BABA",
+   "AMZN",
+   "GM",
+   "T",
+   "UAA",
+   "MA",
+   "SBUX",
+   "USO",
+   "IBM",
+   "AIG"
+  ],
+  "uk_market": [
+   "AAL.L",
+   "ABF.L",
+   "AHT.L",
+   "ANTO.L",
+   "AV.L",
+   "AZN.L",
+   "BA.L",
+   "BARC.L",
+   "BATS.L",
+   "BDEV.L",
+   "BKG.L",
+   "BLND.L",
+   "BNZL.L",
+   "BP.L",
+   "BT-A.L",
+   "CNA.L",
+   "CRDA.L",
+   "DGE.L",
+   "FCIT.L",
+   "GSK.L",
+   "HLMA.L",
+   "HSBA.L",
+   "HSX.L",
+   "III.L",
+   "IMB.L",
+   "INF.L",
+   "JMAT.L",
+   "KGF.L",
+   "LAND.L",
+   "LGEN.L",
+   "LLOY.L",
+   "NG.L",
+   "NWG.L",
+   "NXT.L",
+   "PRU.L",
+   "PSN.L",
+   "PSON.L",
+   "REL.L",
+   "RIO.L",
+   "RKT.L",
+   "RR.L",
+   "RTO.L",
+   "SBRY.L",
+   "SDR.L",
+   "SGE.L",
+   "SGRO.L",
+   "SMDS.L",
+   "SMIN.L",
+   "SMT.L",
+   "SN.L",
+   "SPX.L",
+   "SSE.L",
+   "STAN.L",
+   "STJ.L",
+   "SVT.L",
+   "TSCO.L",
+   "TW.L",
+   "ULVR.L",
+   "UU.L",
+   "VOD.L",
+   "WEIR.L",
+   "WPP.L",
+   "WTB.L"
+  ],
+  "dollar": [
+   "AUD",
+   "CAD",
+   "DKK",
+   "EUR",
+   "JPY",
+   "NZD",
+   "NOK",
+   "SEK",
+   "CHF",
+   "GBP",
+   "BRL",
+   "MXN",
+   "ZAR",
+   "KRW",
+   "INR",
+   "SGD",
+   "TWD",
+   "THB"
+  ],
+  "commodity": [
+   "WTI",
+   "BRENT",
+   "GOLD"
+  ],
+  "index_etf": [
+   "SPY",
+   "QQQ",
+   "IWM",
+   "EEM",
+   "SP500"
+  ],
+  "us_tech": [
+   "AAPL",
+   "AMD",
+   "MSFT",
+   "GOOG",
+   "FB",
+   "IBM"
+  ],
+  "us_fin": [
+   "BAC",
+   "JPM",
+   "MA",
+   "AIG"
+  ],
+  "us_energy": [
+   "CVX",
+   "XOM",
+   "USO"
+  ],
+  "us_health": [
+   "JNJ",
+   "LLY",
+   "MRK",
+   "PFE",
+   "UNH"
+  ],
+  "us_cons": [
+   "BBY",
+   "HD",
+   "KO",
+   "PEP",
+   "PG",
+   "WMT",
+   "AMZN",
+   "GM",
+   "UAA",
+   "SBUX"
+  ]
+ },
+ "basket_static": {
+  "results": [
+   {
+    "signal": "baskets: static curve",
+    "rule": "aim",
+    "sharpe_gross": 0.6747328861581086,
+    "turnover": 8.612873378329004,
+    "breakeven_bp": 65.53007082550178,
+    "net_0bp": 0.6747328861581086,
+    "net_1bp": 0.6644147921851329,
+    "net_2bp": 0.6540971053929996,
+    "net_5bp": 0.6231466120446981,
+    "net_10bp": 0.5715717562687704
+   },
+   {
+    "signal": "baskets: static curve",
+    "rule": "gp 0.05",
+    "sharpe_gross": 0.6572345651928597,
+    "turnover": 2.1451496538123322,
+    "breakeven_bp": 271.34552077108947,
+    "net_0bp": 0.6572345651928597,
+    "net_1bp": 0.6548117535110123,
+    "net_2bp": 0.6523889404911168,
+    "net_5bp": 0.6451204941131391,
+    "net_10bp": 0.6330063966821328
+   }
+  ],
+  "ic": 0.016099911763906682
+ },
+ "basket_vol": {
+  "results": [
+   {
+    "signal": "baskets: volatility surface",
+    "rule": "aim",
+    "sharpe_gross": 0.6334011507360244,
+    "turnover": 11.299797535025446,
+    "breakeven_bp": 48.40660340631391,
+    "net_0bp": 0.6334011507360244,
+    "net_1bp": 0.6202822950161361,
+    "net_2bp": 0.6071642851195455,
+    "net_5bp": 0.5678157092587748,
+    "net_10bp": 0.5022551990629762
+   },
+   {
+    "signal": "baskets: volatility surface",
+    "rule": "gp 0.05",
+    "sharpe_gross": 0.5860165368873291,
+    "turnover": 2.834573699614514,
+    "breakeven_bp": 192.70530361815935,
+    "net_0bp": 0.5860165368873291,
+    "net_1bp": 0.5829743875016867,
+    "net_2bp": 0.5799322386346685,
+    "net_5bp": 0.5708057969546347,
+    "net_10bp": 0.5555950880799561
+   }
+  ],
+  "ic": 0.014662562539317773
+ },
+ "basket_vol_corr": {
+  "results": [
+   {
+    "signal": "baskets: volatility + correlation surfaces",
+    "rule": "aim",
+    "sharpe_gross": 0.8154466943267362,
+    "turnover": 11.276438118475662,
+    "breakeven_bp": 57.297923697160606,
+    "net_0bp": 0.8154466943267362,
+    "net_1bp": 0.8011103693275794,
+    "net_2bp": 0.786777101320846,
+    "net_5bp": 0.7437960048890107,
+    "net_10bp": 0.6722253884552063
+   },
+   {
+    "signal": "baskets: volatility + correlation surfaces",
+    "rule": "gp 0.05",
+    "sharpe_gross": 0.6205737957827235,
+    "turnover": 2.9016232464179232,
+    "breakeven_bp": 188.24579046144083,
+    "net_0bp": 0.6205737957827235,
+    "net_1bp": 0.6172748885194806,
+    "net_2bp": 0.6139759925607009,
+    "net_5bp": 0.604079374639367,
+    "net_10bp": 0.58758525738878
+   }
+  ],
+  "ic": 0.02204919804325096
+ },
+ "basket_vol_mkt": {
+  "results": [
+   {
+    "signal": "baskets: own + US market past, volatility surface",
+    "rule": "aim",
+    "sharpe_gross": 0.6683849387983813,
+    "turnover": 11.975972049783953,
+    "breakeven_bp": 47.13027257510728,
+    "net_0bp": 0.6683849387983813,
+    "net_1bp": 0.65418636988119,
+    "net_2bp": 0.6399878296001873,
+    "net_5bp": 0.5973928508323343,
+    "net_10bp": 0.5264061798871563
+   },
+   {
+    "signal": "baskets: own + US market past, volatility surface",
+    "rule": "gp 0.05",
+    "sharpe_gross": 0.6488219679452651,
+    "turnover": 2.6784444256340234,
+    "breakeven_bp": 210.3021758383726,
+    "net_0bp": 0.6488219679452651,
+    "net_1bp": 0.6457369287776827,
+    "net_2bp": 0.642651878817251,
+    "net_5bp": 0.6333966655268343,
+    "net_10bp": 0.6179711067671344
+   }
+  ],
+  "ic": 0.015832476250619752
+ },
+ "asset_vol": {
+  "results": [
+   {
+    "signal": "assets: volatility surface",
+    "rule": "aim",
+    "sharpe_gross": 0.9677960359406036,
+    "turnover": 58.73654707367129,
+    "breakeven_bp": 14.767026298024366,
+    "net_0bp": 0.9677960359406036,
+    "net_1bp": 0.9023177310306869,
+    "net_2bp": 0.8368247967533244,
+    "net_5bp": 0.6402723164491643,
+    "net_10bp": 0.3125240117735521
+   },
+   {
+    "signal": "assets: volatility surface",
+    "rule": "gp 0.05",
+    "sharpe_gross": 0.8163147468767156,
+    "turnover": 7.640955403108212,
+    "breakeven_bp": 90.56643297617552,
+    "net_0bp": 0.8163147468767156,
+    "net_1bp": 0.8073013912196961,
+    "net_2bp": 0.7982879827925685,
+    "net_5bp": 0.7712474581576229,
+    "net_10bp": 0.7261790228606972
+   }
+  ],
+  "ic": 0.02189316189411923
+ }
+}

@@ -504,14 +504,18 @@ def build_multi_design(X_exp, y, components, covariates=None, intercept=True, of
             # for stacked panels pass calendar time as a numeric modifier instead
             z = (keep - keep.min()) / max(float(keep.max() - keep.min()), 1.0)
         else:
-            z = rows(np.asarray(modifier, float).ravel(), "modifier")
+            zm = np.asarray(modifier, float)
+            if zm.ndim == 2 and zm.shape[1] == E and E > 1:
+                z = np.stack([rows(zm[:, e], "modifier") for e in range(E)], axis=1)   # one state per exposure
+            else:
+                z = rows(zm.ravel(), "modifier")
 
     blocks, Ls = [], []
     for e, comp in enumerate(components):
         p = comp.struct.p
         L = np.vstack([lag_matrix(xs[seg, e], p)[p_max - p:] for seg in segments])
         Ls.append(L)
-        blocks.append(comp.design(L, z))
+        blocks.append(comp.design(L, z[:, e] if (z is not None and z.ndim == 2) else z))
     cols = []
     if intercept:
         cols.append(np.ones((N, 1)))

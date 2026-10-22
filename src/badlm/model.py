@@ -7,6 +7,24 @@ import numpy as np
 
 from .design import (DesignData, LagComponent, Standardizer, Structure, build_modifier,
                      build_multi_design, build_structure, lag_matrix)
+
+
+def build_modifier_bases(modifier, x_arr, K, n_exposures, standardize=True):
+    """One :class:`ModifierBasis` per exposure. ``modifier`` is ``'time'``,
+    ``'exposure'``, a series shared by every exposure, or an ``(n, E)`` array
+    with one state variable per exposure (additive state surfaces)."""
+    if isinstance(modifier, str):
+        if modifier == "exposure":
+            xs = x_arr
+            if standardize:
+                sd = x_arr.std(axis=0, ddof=1)
+                xs = (x_arr - x_arr.mean(axis=0)) / np.where(sd > 0, sd, 1.0)
+            return [build_modifier(xs[:, e], K=K, kind="exposure") for e in range(n_exposures)]
+        return [build_modifier(None, K=K, kind="time")] * n_exposures
+    zm = np.asarray(modifier, float)
+    if zm.ndim == 2 and zm.shape[1] == n_exposures and n_exposures > 1:
+        return [build_modifier(zm[:, e], K=K, kind="covariate") for e in range(n_exposures)]
+    return [build_modifier(zm.ravel(), K=K, kind="covariate")] * n_exposures
 from .diagnostics import summarise_draws
 from .priors import Priors
 
@@ -171,32 +189,32 @@ class BADLM:
             x_arr = x_arr[:, None]
         if x_arr.shape[1] != self.n_exposures:
             raise ValueError(f"x must have {self.n_exposures} column(s), one per exposure")
-        mod_basis = None
+        mod_bases = [None] * self.n_exposures
         if self.modifier_k is not None:
             if modifier is None:
                 raise ValueError("modifier_k is set; pass modifier= (a series or 'time') to fit")
             if isinstance(modifier, str) and modifier not in ("time", "exposure"):
                 raise ValueError("modifier must be a series, 'time' or 'exposure'")
-            kind = modifier if isinstance(modifier, str) else "covariate"
-            z_for_domain = (x_arr - x_arr.mean(axis=0)) / np.where(x_arr.std(axis=0, ddof=1) > 0, x_arr.std(axis=0, ddof=1), 1.0) \
-                if (kind == "exposure" and self.standardize) else (x_arr if kind == "exposure" else modifier)
-            mod_basis = build_modifier(None if kind == "time" else z_for_domain, K=self.modifier_k, kind=kind)
-        self.components_ = [LagComponent(st, mod_basis) for st in self.structs_]
+            mod_bases = build_modifier_bases(modifier, x_arr, self.modifier_k, self.n_exposures, self.standardize)
+        self.components_ = [LagComponent(st, mb) for st, mb in zip(self.structs_, mod_bases)]
         data, std = build_multi_design(x_arr, y, self.components_, covariates=covariates,
                                        intercept=self.intercept, offset=offset,
                                        standardize=self.standardize, family=self.family,
                                        groups=groups, weights=weights, modifier=modifier)
         self.data_: DesignData = data
         self.std_: Standardizer = std
-        self.modifier_ = mod_basis
+        self.modifier_ = mod_bases[0]
         # average modifier basis over the training rows: the curve 'at the average state'
         # (for an exposure modifier, over the exposure values)
-        if mod_basis is None:
-            self.mod_weights_ = None
-        elif mod_basis.kind == "exposure":
-            self.mod_weights_ = mod_basis.basis(data.Ls[0].ravel()).mean(axis=0)
-        else:
-            self.mod_weights_ = mod_basis.basis(data.z).mean(axis=0)
+        self.mod_weights_ = []
+        for e, mb in enumerate(mod_bases):
+            if mb is None:
+                self.mod_weights_.append(None)
+            elif mb.kind == "exposure":
+                self.mod_weights_.append(mb.basis(data.Ls[e].ravel()).mean(axis=0))
+            else:
+                ze = data.z[:, e] if data.z.ndim == 2 else data.z
+                self.mod_weights_.append(mb.basis(ze).mean(axis=0))
         self.C_ = tau_basis_matrix(self.struct.K_tau, self.priors.tau_basis) if self.tau_model == "basis" else None
         self.fit_info_ = {"sampler": self.sampler, "samples": samples, "warmup": warmup, "chains": chains}
         self._nuts_opts = {"dense_mass": dense_mass, "max_tree_depth": max_tree_depth}
@@ -289,7 +307,7 @@ class BADLM:
         for e, comp in enumerate(self.components_):
             b = theta[..., off: off + comp.dim]
             off += comp.dim
-            beta_s = comp.curve(b, weights=self.mod_weights_) if comp.modifier is not None else comp.curve(b)
+            beta_s = comp.curve(b, weights=self.mod_weights_[e]) if comp.modifier is not None else comp.curve(b)
             sfx = "" if e == 0 else f"_{e}"
             self.draws_["beta_std" + sfx] = beta_s
             self.draws_["lag_curve" + sfx] = beta_s * (y_scale / x_sd[e])
@@ -448,13 +466,14 @@ class BADLM:
             if modifier is None or (isinstance(modifier, str) and modifier == "time"):
                 z = np.full(n, self.modifier_.domain[1])
             else:
-                z = np.asarray(modifier, float).ravel()
-                z = z[p_max:] if z.size == x_new.shape[0] else z
+                z = np.asarray(modifier, float)
+                z = z[p_max:] if z.shape[0] == x_new.shape[0] else z
         blocks = []
         for e, comp in enumerate(self.components_):
             p = comp.struct.p
             L = lag_matrix(xs[:, e], p)[p_max - p:]
-            blocks.append(comp.design(L, z))
+            ze = z[:, e] if (z is not None and z.ndim == 2) else z
+            blocks.append(comp.design(L, ze))
         cols = []
         if self.intercept:
             cols.append(np.ones((n, 1)))

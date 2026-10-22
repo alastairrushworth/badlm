@@ -127,3 +127,80 @@ def test_exposure_surface_recovers_nonlinear_response():
         assert abs(s["median"][i, 0] - b[0] * (1 - 0.3 * xv**2)) < 0.1
     pr = m.predict(x[-300:])
     assert np.corrcoef(pr["mean"], mu[-280:])[0, 1] > 0.9
+
+
+def test_ar1_carry_over_improves_walk_forward_log_score():
+    from badlm.backtest import log_score, walk_forward
+    from badlm.simulate import ar1
+
+    rng = np.random.default_rng(11)
+    n, lag = 3000, np.arange(21.0)
+    x = rng.normal(size=n)
+    b = 0.3 * np.exp(-lag / 4.0)
+    b[-1] = 0.0
+    mu = lag_matrix(x, 20) @ b
+    y = mu + ar1(mu.size, 0.7, 1.0, rng)                      # strongly autocorrelated errors
+    time = np.arange(n)
+    plain = walk_forward(BADLM(nlag=20, k=10), x, y, time, start=1500, step=500)
+    with_ar = walk_forward(BADLM(nlag=20, k=10, ar1=True), x, y, time, start=1500, step=500)
+    assert with_ar.fit_info[-1]["phi"] > 0.5
+    assert log_score(with_ar.y, with_ar.mean, with_ar.var) > log_score(plain.y, plain.mean, plain.var) + 0.1
+
+
+def test_blocked_cv_and_ensemble(two_exposure_data):
+    from badlm.backtest import blocked_cv, ensemble, subperiod_sharpe
+
+    x1, _, y, b1, _, _ = two_exposure_data
+    time = np.arange(x1.size)
+    cv = blocked_cv(BADLM(nlag=20, k=10), x1, y, time, n_blocks=4, embargo=20)
+    assert cv.mean.size == x1.size - 20
+    mu1 = lag_matrix(x1, 20) @ b1
+    assert np.corrcoef(cv.mean, mu1[cv.row - 20])[0, 1] > 0.9
+    ens = ensemble([cv, cv])
+    assert np.allclose(ens.mean, cv.mean) and np.allclose(ens.var, cv.var)
+    sp = subperiod_sharpe(np.sign(cv.mean) * cv.y, cv.time, breaks=[1000, 2000])
+    assert len(sp) == 3 and all(s[2] > 0 for s in sp)
+
+
+
+def test_panel_model_recovers_loadings_and_curves():
+    from badlm.panel import PanelFitter, build_panel_design, panel_walk_forward
+
+    rng = np.random.default_rng(3)
+    N, T, p = 8, 1500, 15
+    lag = np.arange(p + 1.0)
+    g1 = 0.4 * np.exp(-lag / 3.0)
+    g1[-1] = 0.0
+    g2 = 0.3 * np.exp(-0.5 * ((lag - 5) / 2.0) ** 2)
+    g2[-1] = 0.0
+    f = rng.normal(size=T)
+    u1, u2 = 1 + 0.5 * rng.normal(size=N), 1 + 0.3 * rng.normal(size=N)
+    ys, fs, xs, assets, times, mus = [], [], [], [], [], []
+    for i in range(N):
+        x = rng.normal(size=T)
+        mu = u1[i] * (lag_matrix(f, p) @ g1) + u2[i] * (lag_matrix(x, p) @ g2)
+        ys.append(np.r_[np.zeros(p), mu] + rng.normal(size=T))
+        fs.append(f); xs.append(x); assets.append(np.full(T, i)); times.append(np.arange(T)); mus.append(mu)
+    y, F, X, A, Tm = map(np.concatenate, (ys, fs, xs, assets, times))
+    d = build_panel_design([F, X], y, Tm, A, nlag=p, k=10)
+    st = d.stats(np.ones(d.y.size, bool))
+    fit = PanelFitter(d, st)
+    res = fit.fit(st)
+    c1, c2 = fit.curves(res)
+    # the scale is shared between a curve and its loadings; the products are identified
+    prod1 = res["loading"][:, 0][:, None] * c1[None, :]
+    prod2 = res["loading"][:, 1][:, None] * c2[None, :]
+    assert np.sqrt(np.mean((prod1 - u1[:, None] * g1[None, :]) ** 2)) < 0.05
+    assert np.sqrt(np.mean((prod2 - u2[:, None] * g2[None, :]) ** 2)) < 0.05
+    assert np.corrcoef(res["loading"][:, 0], u1)[0, 1] > 0.95
+    mu_true = np.concatenate(mus)
+    wf = panel_walk_forward(d, start=900, step=300)
+    wfp = panel_walk_forward(d, start=900, step=300, pool=True)
+    sel = np.isin(d.row, wf["row"])
+    assert np.corrcoef(wf["mean"], mu_true[sel])[0, 1] > np.corrcoef(wfp["mean"], mu_true[sel])[0, 1] + 0.03
+    # modifier surfaces inside the panel run
+    z = rng.normal(size=y.size)
+    dm = build_panel_design([F, X], y, Tm, A, nlag=p, k=10, modifier=z, modifier_k=4)
+    stm = dm.stats(np.ones(dm.y.size, bool))
+    resm = PanelFitter(dm, stm).fit(stm)
+    assert np.isfinite(resm["mean"]).all() and len(PanelFitter(dm, stm).curves(resm)[0]) == 5

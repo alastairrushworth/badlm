@@ -86,7 +86,7 @@ class FastFitter:
         A = jnp.zeros((k + self.q, k + self.q)).at[:k, :k].set(Q) + S / sigma2
         A_inv = jnp.linalg.inv(A)
         mean = A_inv @ (s / sigma2)
-        return mean, A_inv, sigma2, taus
+        return mean, A_inv, sigma2, taus, phi
 
     def _constrain_impl(self, zf, st):
         return self._constrain(zf, st)
@@ -109,8 +109,8 @@ class FastFitter:
         if not np.all(np.isfinite(res.x)):
             res = minimize(f, self.z0, jac=True, method="L-BFGS-B", options={"maxiter": maxiter})
         self.last_mode = np.asarray(res.x, float)
-        mean, cov, sigma2, taus = self._coef(jnp.asarray(self.last_mode), stats)
-        return {"mean": np.asarray(mean), "cov": np.asarray(cov), "sigma2": float(sigma2),
+        mean, cov, sigma2, taus, phi = self._coef(jnp.asarray(self.last_mode), stats)
+        return {"mean": np.asarray(mean), "cov": np.asarray(cov), "sigma2": float(sigma2), "phi": float(phi),
                 "taus": [np.asarray(t) for t in taus], "converged": bool(res.success), "nit": res.nit}
 
 
@@ -141,27 +141,24 @@ def walk_forward(model, x, y, time, *, groups=None, covariates=None, weights=Non
     length. Inputs must already be on the scale the model should see
     (``standardize`` is switched off so no full-sample statistic leaks).
 
-    The predictive mean is the regression mean ``X beta``. With ``ar1=True``
-    the AR(1) model would also carry over ``phi`` times the previous residual,
-    which this function does not add, so do not use AR(1) errors for
-    prediction (with overlapping targets the regression mean alone is badly
-    wrong).
+    With ``ar1=True`` the predictive mean adds ``phi`` times the previous
+    row's residual within the same group, as the AR(1) error model implies
+    (the previous response is realised by the time the prediction is made);
+    the predictive variance is then ``sigma2 (1 - phi^2)`` plus the
+    coefficient term.
     """
     model.standardize = False
     x_arr = np.asarray(x, float)
     if x_arr.ndim == 1:
         x_arr = x_arr[:, None]
-    if modifier is not None and model.modifier_k is not None:
-        from .design import LagComponent, build_modifier
-
-        kind = modifier if isinstance(modifier, str) else "covariate"
-        src = None if kind == "time" else (x_arr[:, 0] if kind == "exposure" else modifier)
-        mod_basis = build_modifier(src, K=model.modifier_k, kind=kind)
-    else:
-        mod_basis = None
     from .design import LagComponent
+    from .model import build_modifier_bases
 
-    model.components_ = [LagComponent(st, mod_basis) for st in model.structs_]
+    if modifier is not None and model.modifier_k is not None:
+        mod_bases = build_modifier_bases(modifier, x_arr, model.modifier_k, model.n_exposures, standardize=False)
+    else:
+        mod_bases = [None] * model.n_exposures
+    model.components_ = [LagComponent(st, mb) for st, mb in zip(model.structs_, mod_bases)]
     from .numpyro_model import tau_basis_matrix
 
     model.C_ = tau_basis_matrix(model.struct.K_tau, model.priors.tau_basis) if model.tau_model == "basis" else None
@@ -170,6 +167,11 @@ def walk_forward(model, x, y, time, *, groups=None, covariates=None, weights=Non
     t_row = np.asarray(time)[data.keep]
     X, yv = data.X, data.y
     w = data.weights
+    g_row = None if groups is None else np.asarray(groups)[data.keep]
+    prev = np.arange(yv.size) - 1                       # previous row of the same group, -1 if none
+    if g_row is not None:
+        prev[1:] = np.where(g_row[1:] == g_row[:-1], prev[1:], -1)
+    prev[0] = -1
     fitter = None
     out_mean = np.full(yv.size, np.nan)
     out_var = np.full(yv.size, np.nan)
@@ -190,12 +192,22 @@ def walk_forward(model, x, y, time, *, groups=None, covariates=None, weights=Non
                 fitter = FastFitter(model, stats, data.q)
             res = fitter.fit(stats)
             Xt = X[test]
-            out_mean[test] = Xt @ res["mean"]
-            out_var[test] = res["sigma2"] + np.einsum("ij,jk,ik->i", Xt, res["cov"], Xt)
+            mean_t = Xt @ res["mean"]
+            var_t = res["sigma2"] + np.einsum("ij,jk,ik->i", Xt, res["cov"], Xt)
+            if model.ar1:
+                idx = np.where(test)[0]
+                pv = prev[idx]
+                ok = pv >= 0
+                resid_prev = np.zeros(idx.size)
+                resid_prev[ok] = yv[pv[ok]] - X[pv[ok]] @ res["mean"]
+                mean_t = mean_t + res["phi"] * resid_prev
+                var_t = var_t - res["phi"] ** 2 * res["sigma2"] * ok
+            out_mean[test] = mean_t
+            out_var[test] = var_t
             refits.append(T)
             curves.append(_mode_curves(model, res["mean"]))
-            infos.append({"sigma2": res["sigma2"], "nit": res["nit"], "converged": res["converged"],
-                          "n_train": int(train.sum())})
+            infos.append({"sigma2": res["sigma2"], "phi": res["phi"], "nit": res["nit"],
+                          "converged": res["converged"], "n_train": int(train.sum())})
             if verbose:
                 print(f"refit at {T}: n_train={train.sum()}, nit={res['nit']}, sigma2={res['sigma2']:.4f}")
         T = T + step
@@ -314,3 +326,98 @@ def deflated_sharpe(returns, n_trials, trial_sr_var=None):
     n = max(int(n_trials), 2)
     sr0 = np.sqrt(trial_sr_var) * ((1 - euler) * ndtri(1 - 1.0 / n) + euler * ndtri(1 - 1.0 / (n * np.e)))
     return probabilistic_sharpe(r, sr0), float(sr0)
+
+
+# ---------------------------------------------------------------------------
+# Robustness: sub-periods, log score, blocked cross-validation
+# ---------------------------------------------------------------------------
+def subperiod_sharpe(pnl, time, breaks, periods_per_year=252):
+    """Annualised Sharpe ratio of a daily profit series within consecutive
+    sub-periods delimited by ``breaks`` (time stamps); returns a list of
+    ``(start, end, sharpe, n_days)``."""
+    pnl, time = np.asarray(pnl, float), np.asarray(time)
+    edges = [time.min()] + list(breaks) + [time.max() + 1]
+    out = []
+    for lo, hi in zip(edges[:-1], edges[1:]):
+        m = (time >= lo) & (time < hi)
+        if m.sum() > 2 and pnl[m].std(ddof=1) > 0:
+            out.append((lo, hi, float(pnl[m].mean() / pnl[m].std(ddof=1) * np.sqrt(periods_per_year)), int(m.sum())))
+        else:
+            out.append((lo, hi, np.nan, int(m.sum())))
+    return out
+
+
+def log_score(y, mean, var):
+    """Mean Gaussian predictive log density of the outcomes."""
+    y, mean, var = (np.asarray(v, float) for v in (y, mean, var))
+    return float(np.mean(-0.5 * np.log(2 * np.pi * var) - 0.5 * (y - mean) ** 2 / var))
+
+
+def blocked_cv(model, x, y, time, *, n_blocks=8, embargo, groups=None, covariates=None, weights=None,
+               modifier=None):
+    """Blocked cross-validation with an embargo: the time axis is cut into
+    ``n_blocks`` contiguous blocks, each is predicted from a fit on the other
+    blocks with ``embargo`` time units removed on both sides of the held-out
+    block (so no training row's lags overlap the test block). Unlike
+    :func:`walk_forward` this uses future data for training and so measures
+    whether a relation exists and is stable, not whether it was tradable.
+    Returns a :class:`WalkForwardResult` with ``refit_times`` holding the block
+    boundaries."""
+    from .design import LagComponent
+
+    model.standardize = False
+    x_arr = np.asarray(x, float)
+    if x_arr.ndim == 1:
+        x_arr = x_arr[:, None]
+    from .model import build_modifier_bases
+
+    if modifier is not None and model.modifier_k is not None:
+        mod_bases = build_modifier_bases(modifier, x_arr, model.modifier_k, model.n_exposures, standardize=False)
+    else:
+        mod_bases = [None] * model.n_exposures
+    model.components_ = [LagComponent(st, mb) for st, mb in zip(model.structs_, mod_bases)]
+    from .numpyro_model import tau_basis_matrix
+
+    model.C_ = tau_basis_matrix(model.struct.K_tau, model.priors.tau_basis) if model.tau_model == "basis" else None
+    data, _ = build_multi_design(x_arr, y, model.components_, covariates=covariates, intercept=model.intercept,
+                                 standardize=False, groups=groups, weights=weights, modifier=modifier)
+    t_row = np.asarray(time)[data.keep]
+    X, yv, w = data.X, data.y, data.weights
+    edges = np.quantile(t_row, np.linspace(0, 1, n_blocks + 1))
+    out_mean = np.full(yv.size, np.nan)
+    out_var = np.full(yv.size, np.nan)
+    fitter, curves, infos = None, [], []
+    for b in range(n_blocks):
+        lo, hi = edges[b], edges[b + 1]
+        test = (t_row >= lo) & (t_row < hi) if b < n_blocks - 1 else (t_row >= lo)
+        train = ~((t_row >= lo - embargo) & (t_row < hi + embargo))
+        stats = SuffStats.from_data(X[train], yv[train], weights=None if w is None else w[train])
+        if fitter is None:
+            fitter = FastFitter(model, stats, data.q)
+        res = fitter.fit(stats, warm=False)
+        Xt = X[test]
+        out_mean[test] = Xt @ res["mean"]
+        out_var[test] = res["sigma2"] + np.einsum("ij,jk,ik->i", Xt, res["cov"], Xt)
+        curves.append(_mode_curves(model, res["mean"]))
+        infos.append({"sigma2": res["sigma2"], "n_train": int(train.sum()), "block": (float(lo), float(hi))})
+    have = np.isfinite(out_mean)
+    return WalkForwardResult(time=t_row[have], row=data.keep[have], mean=out_mean[have], var=out_var[have],
+                             y=yv[have], refit_times=list(edges), curves=curves, fit_info=infos)
+
+
+def ensemble(results, weights=None):
+    """Average the predictive means and variances of several
+    :class:`WalkForwardResult` objects on identical rows (a mixture of
+    Gaussians: the variance includes the spread of the means)."""
+    n = len(results)
+    weights = np.full(n, 1.0 / n) if weights is None else np.asarray(weights, float) / np.sum(weights)
+    rows = results[0].row
+    for r in results[1:]:
+        if not np.array_equal(r.row, rows):
+            raise ValueError("ensemble members must predict the same rows")
+    means = np.stack([r.mean for r in results])
+    vars_ = np.stack([r.var for r in results])
+    mean = np.einsum("k,ki->i", weights, means)
+    var = np.einsum("k,ki->i", weights, vars_ + means**2) - mean**2
+    return WalkForwardResult(time=results[0].time, row=rows, mean=mean, var=var, y=results[0].y,
+                             refit_times=results[0].refit_times, curves=[], fit_info=[])
